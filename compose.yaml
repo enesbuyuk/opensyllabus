@@ -1,0 +1,37 @@
+# OpenSyllabus production stack (single container + persistent volume).
+# Usage: cp .env.example .env && edit, then `docker compose up -d --build`.
+name: opensyllabus
+
+services:
+  opensyllabus:
+    build: .
+    image: opensyllabus:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Paths inside the container (data lives in the named volume).
+      DATABASE_PATH: /data/db/opensyllabus.db
+      STORAGE_DIR: /data/storage
+      STATIC_DIR: /app/public
+      BIND_ADDR: 0.0.0.0:8080
+    ports:
+      # Bound to localhost: put a TLS-terminating reverse proxy in front (see deploy/).
+      - "127.0.0.1:${HOST_PORT:-8080}:8080"
+    volumes:
+      - opensyllabus-data:/data
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  opensyllabus-data:

@@ -1,0 +1,191 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Light theme */
+:root {
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.2 0.006 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.006 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.006 270);
+  --primary: oklch(0.52 0.17 268);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.003 270);
+  --secondary-foreground: oklch(0.25 0.006 270);
+  --muted: oklch(0.965 0.003 270);
+  --muted-foreground: oklch(0.52 0.012 270);
+  --accent: oklch(0.955 0.005 270);
+  --accent-foreground: oklch(0.22 0.006 270);
+  --destructive: oklch(0.58 0.21 25);
+  --success: oklch(0.6 0.14 155);
+  --warning: oklch(0.72 0.15 70);
+  --info: oklch(0.6 0.13 240);
+  --border: oklch(0.915 0.004 270);
+  --input: oklch(0.9 0.004 270);
+  --ring: oklch(0.6 0.15 268);
+  --sidebar: oklch(0.975 0.002 270);
+  --sidebar-border: oklch(0.92 0.004 270);
+  --chart-1: oklch(0.55 0.17 268);
+  --chart-2: oklch(0.6 0.12 175);
+  --chart-3: oklch(0.72 0.14 75);
+  --chart-4: oklch(0.62 0.18 330);
+  --chart-5: oklch(0.6 0.12 230);
+  --radius: 0.6rem;
+}
+
+/* Dark theme (default) */
+.dark {
+  --background: oklch(0.155 0.004 270);
+  --foreground: oklch(0.94 0.004 270);
+  --card: oklch(0.185 0.005 270);
+  --card-foreground: oklch(0.94 0.004 270);
+  --popover: oklch(0.2 0.005 270);
+  --popover-foreground: oklch(0.94 0.004 270);
+  --primary: oklch(0.7 0.14 268);
+  --primary-foreground: oklch(0.16 0.01 270);
+  --secondary: oklch(0.235 0.006 270);
+  --secondary-foreground: oklch(0.92 0.004 270);
+  --muted: oklch(0.225 0.005 270);
+  --muted-foreground: oklch(0.66 0.01 270);
+  --accent: oklch(0.245 0.007 270);
+  --accent-foreground: oklch(0.95 0.004 270);
+  --destructive: oklch(0.65 0.19 25);
+  --success: oklch(0.7 0.14 155);
+  --warning: oklch(0.79 0.14 75);
+  --info: oklch(0.7 0.12 240);
+  --border: oklch(0.27 0.006 270);
+  --input: oklch(0.3 0.007 270);
+  --ring: oklch(0.65 0.13 268);
+  --sidebar: oklch(0.135 0.004 270);
+  --sidebar-border: oklch(0.24 0.005 270);
+  --chart-1: oklch(0.66 0.14 268);
+  --chart-2: oklch(0.66 0.12 175);
+  --chart-3: oklch(0.8 0.13 80);
+  --chart-4: oklch(0.7 0.16 330);
+  --chart-5: oklch(0.7 0.11 230);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-slide-up: slide-up 180ms ease-out;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 30%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Markdown content */
+.prose-opensyllabus {
+  @apply text-[0.94rem] leading-7 text-foreground;
+}
+.prose-opensyllabus > * + * { margin-top: 0.85em; }
+.prose-opensyllabus h1 { @apply text-2xl font-semibold tracking-tight mt-8 mb-3; }
+.prose-opensyllabus h2 { @apply text-xl font-semibold tracking-tight mt-7 mb-2; }
+.prose-opensyllabus h3 { @apply text-base font-semibold mt-6 mb-2; }
+.prose-opensyllabus h4 { @apply text-sm font-semibold mt-5 mb-1 uppercase tracking-wide text-muted-foreground; }
+.prose-opensyllabus > :first-child { margin-top: 0; }
+.prose-opensyllabus a { @apply text-primary underline underline-offset-2 decoration-primary/40 hover:decoration-primary; }
+.prose-opensyllabus ul { @apply list-disc pl-5 space-y-1; }
+.prose-opensyllabus ol { @apply list-decimal pl-5 space-y-1; }
+.prose-opensyllabus li > ul, .prose-opensyllabus li > ol { @apply mt-1; }
+.prose-opensyllabus blockquote { @apply border-l-2 border-primary/50 pl-4 text-muted-foreground italic; }
+.prose-opensyllabus hr { @apply my-6 border-border; }
+.prose-opensyllabus img { @apply rounded-lg border max-w-full; }
+.prose-opensyllabus table { @apply w-full text-sm border-collapse block overflow-x-auto; }
+.prose-opensyllabus th { @apply border-b px-3 py-2 text-left font-medium text-muted-foreground; }
+.prose-opensyllabus td { @apply border-b px-3 py-2; }
+.prose-opensyllabus :not(pre) > code {
+  @apply rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.85em];
+}
+.prose-opensyllabus pre {
+  @apply overflow-x-auto rounded-lg border bg-muted/60 p-4 font-mono text-[0.82rem] leading-6;
+}
+.prose-opensyllabus input[type='checkbox'] { @apply mr-2 align-middle; }
+
+/* Syntax highlighting (highlight.js token classes) */
+.hljs-comment, .hljs-quote { color: var(--muted-foreground); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: oklch(0.62 0.16 300); }
+.dark .hljs-keyword, .dark .hljs-selector-tag, .dark .hljs-built_in { color: oklch(0.76 0.13 300); }
+.hljs-string, .hljs-attr, .hljs-template-variable { color: oklch(0.55 0.13 150); }
+.dark .hljs-string, .dark .hljs-attr, .dark .hljs-template-variable { color: oklch(0.78 0.13 150); }
+.hljs-number, .hljs-literal, .hljs-symbol { color: oklch(0.6 0.15 50); }
+.dark .hljs-number, .dark .hljs-literal, .dark .hljs-symbol { color: oklch(0.8 0.12 60); }
+.hljs-title, .hljs-function .hljs-title, .hljs-section { color: oklch(0.55 0.15 250); }
+.dark .hljs-title, .dark .hljs-function .hljs-title, .dark .hljs-section { color: oklch(0.78 0.12 240); }
+.hljs-type, .hljs-class .hljs-title { color: oklch(0.6 0.13 200); }
+.dark .hljs-type, .dark .hljs-class .hljs-title { color: oklch(0.8 0.1 200); }
+.hljs-meta { color: var(--muted-foreground); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }

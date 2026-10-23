@@ -1,0 +1,11 @@
+# Caddy reverse proxy with automatic HTTPS for lms.example.com.
+lms.example.com {
+	encode zstd gzip
+	# Uploads up to MAX_UPLOAD_MB (+ multipart overhead).
+	request_body {
+		max_size 60MB
+	}
+	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Real-IP {remote_host}
+	}
+}

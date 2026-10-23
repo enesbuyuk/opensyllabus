@@ -1,0 +1,76 @@
+import type { AssignmentKind, CalendarEntry, ResourceKind, StudentAssignmentState, SubmissionStatus } from '@/types/api'
+
+export const ASSIGNMENT_KIND_LABELS: Record<AssignmentKind, string> = {
+  written: 'Written assignment',
+  file_upload: 'File upload',
+  code: 'Code submission',
+  lab_report: 'Laboratory report',
+  research: 'Research task',
+  repository: 'Repository URL',
+  mixed: 'Mixed submission',
+}
+
+export const STATE_LABELS: Record<StudentAssignmentState | 'missing', string> = {
+  not_started: 'Not Started',
+  draft: 'Draft',
+  submitted: 'Submitted',
+  late: 'Late',
+  under_review: 'Under Review',
+  graded: 'Graded',
+  revision_requested: 'Revision Requested',
+  missing: 'Missing',
+}
+
+export const SUBMISSION_STATUS_LABELS: Record<SubmissionStatus, string> = {
+  not_started: 'Not Started',
+  draft: 'Draft',
+  submitted: 'Submitted',
+  under_review: 'Under Review',
+  graded: 'Graded',
+  revision_requested: 'Revision Requested',
+}
+
+export const RESOURCE_KIND_LABELS: Record<ResourceKind, string> = {
+  pdf: 'PDF',
+  image: 'Image',
+  markdown: 'Notes',
+  code: 'Code example',
+  link: 'External link',
+  video: 'Video',
+  datasheet: 'Datasheet',
+  lab: 'Lab instructions',
+}
+
+export const LATE_POLICY_LABELS = {
+  accept: 'Accept late submissions',
+  penalty: 'Accept with penalty',
+  reject: 'Do not accept late submissions',
+} as const
+
+export const CALENDAR_KIND_LABELS: Record<CalendarEntry['kind'], string> = {
+  session: 'Session',
+  lab: 'Laboratory',
+  milestone: 'Milestone',
+  other: 'Event',
+  deadline: 'Deadline',
+  course_start: 'Course start',
+  course_end: 'Course end',
+  week_start: 'Week start',
+}
+
+export const LAB_REPORT_SECTIONS: { key: keyof import('@/types/api').LabReport; label: string; hint: string; required?: boolean; rows: number }[] = [
+  { key: 'experiment_title', label: 'Experiment title', hint: 'A concise, descriptive title.', required: true, rows: 1 },
+  { key: 'objective', label: 'Objective', hint: 'What the experiment sets out to determine or verify.', required: true, rows: 3 },
+  { key: 'equipment', label: 'Equipment and components', hint: 'Instruments, components and values (e.g. 1 kΩ resistor, DMM).', rows: 4 },
+  { key: 'setup', label: 'Circuit diagram or setup', hint: 'Describe the setup; attach schematics or photos below.', rows: 4 },
+  { key: 'procedure', label: 'Experimental procedure', hint: 'Numbered steps someone else could reproduce.', required: true, rows: 6 },
+  { key: 'measurements', label: 'Measurements', hint: 'Tables of measured values (Markdown tables work). Attach raw CSV files.', rows: 6 },
+  { key: 'observations', label: 'Observations', hint: 'What you noticed during the experiment.', rows: 4 },
+  { key: 'results', label: 'Results', hint: 'Processed data, calculated values and plots.', required: true, rows: 5 },
+  { key: 'discussion', label: 'Discussion', hint: 'Interpretation, sources of error and comparison with theory.', rows: 5 },
+  { key: 'conclusion', label: 'Conclusion', hint: 'The main takeaway in a few sentences.', required: true, rows: 3 },
+]
+
+export function emptyLabReport() {
+  return Object.fromEntries(LAB_REPORT_SECTIONS.map((s) => [s.key, ''])) as unknown as import('@/types/api').LabReport
+}
