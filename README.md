@@ -206,6 +206,7 @@ OpenSyllabus is configured through environment variables. In Docker they come fr
 | `PUBLIC_URL` | `http://localhost:8080` | Exact origin users open in the browser. Used for CSRF origin checks and generated links. |
 | `COOKIE_SECURE` | `true` if `PUBLIC_URL` is HTTPS | Send cookies with `Secure` and enable HSTS. Must be `false` over plain HTTP. |
 | `TRUST_PROXY` | `false` | Take the client IP from `X-Real-IP` / `X-Forwarded-For`. Enable only behind a proxy. |
+| `CLIENT_IP_HEADER` | (empty) | Header checked first when `TRUST_PROXY` is on, e.g. `CF-Connecting-IP` behind Cloudflare. |
 | `SESSION_TTL_HOURS` | `168` | Sliding session lifetime. |
 | `DEFAULT_TIMEZONE` | `UTC` | IANA timezone of the platform (week opening dates, the "current week"); new users inherit it. |
 | `MAX_UPLOAD_MB` | `50` | Upper limit for any single upload; assignments can set a lower one. |

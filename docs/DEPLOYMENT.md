@@ -16,6 +16,7 @@ Important variables (all documented in `.env.example`):
 | `PUBLIC_URL` | `https://lms.example.com` | Origin for CSRF/Origin checks and generated links |
 | `COOKIE_SECURE` | `true` | `Secure` cookies + HSTS |
 | `TRUST_PROXY` | `true` | Use `X-Real-IP`/`X-Forwarded-For` from the proxy for rate limiting and audit IPs |
+| `CLIENT_IP_HEADER` | (empty) | Behind a CDN: header with the real client IP, checked first (`CF-Connecting-IP` for Cloudflare) |
 | `SESSION_TTL_HOURS` | `168` | Sliding session lifetime |
 | `DEFAULT_TIMEZONE` | e.g. `Europe/Istanbul` (default `UTC`) | Platform timezone (can be changed in Settings) |
 | `MAX_UPLOAD_MB` | `50` | Upper bound for any upload |
@@ -121,6 +122,6 @@ docker compose down -v                         # ⚠ deletes the volume and all 
 |---------|-------|
 | "Cross-origin request rejected" | `PUBLIC_URL` must exactly match the browser origin (scheme + host). |
 | Cannot sign in over plain HTTP | `COOKIE_SECURE=true` requires HTTPS; set `false` only for local testing. |
-| Every user shares one rate-limit bucket | Enable `TRUST_PROXY` and make sure the proxy sets `X-Real-IP`. |
+| Every user shares one rate-limit bucket | Enable `TRUST_PROXY` and make sure the proxy sets `X-Real-IP`. Behind Cloudflare also set `CLIENT_IP_HEADER=CF-Connecting-IP`. |
 | Upload fails with 413 | Increase the proxy body limit and/or `MAX_UPLOAD_MB`. |
 | Forgotten instructor password | `docker compose exec opensyllabus opensyllabus reset-link --email you@…` |

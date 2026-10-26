@@ -20,6 +20,9 @@ pub struct Config {
     pub cookie_secure: bool,
     /// Trust `X-Forwarded-For` / `X-Real-IP` from the reverse proxy.
     pub trust_proxy: bool,
+    /// Header that carries the real client IP behind a CDN (e.g. `CF-Connecting-IP`).
+    /// Checked first when `trust_proxy` is on.
+    pub client_ip_header: Option<String>,
     /// Session lifetime (sliding) in hours.
     pub session_ttl_hours: i64,
     /// Default timezone for the platform (IANA name).
@@ -57,6 +60,7 @@ impl Config {
             static_dir: std::env::var("STATIC_DIR").ok().filter(|s| !s.is_empty()).map(Into::into),
             cookie_secure: env_bool("COOKIE_SECURE", https),
             trust_proxy: env_bool("TRUST_PROXY", false),
+            client_ip_header: std::env::var("CLIENT_IP_HEADER").ok().map(|s| s.trim().to_ascii_lowercase()).filter(|s| !s.is_empty()),
             session_ttl_hours: env_or("SESSION_TTL_HOURS", "168").parse().context("SESSION_TTL_HOURS must be an integer")?,
             default_timezone,
             max_upload_mb: env_or("MAX_UPLOAD_MB", "50").parse().context("MAX_UPLOAD_MB must be an integer")?,
@@ -80,6 +84,7 @@ impl Config {
             public_url: "http://localhost:8080".into(),
             cookie_secure: false,
             trust_proxy: false,
+            client_ip_header: None,
             session_ttl_hours: 24,
             default_timezone: "UTC".into(),
             max_upload_mb: 10,

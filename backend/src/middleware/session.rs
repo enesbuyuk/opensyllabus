@@ -24,7 +24,12 @@ pub async fn session_middleware(State(state): State<AppState>, mut req: Request,
     if !req.uri().path().starts_with("/api/") {
         return next.run(req).await;
     }
-    let ip = client_ip(req.headers(), req.extensions().get::<ConnectInfo<SocketAddr>>(), state.config.trust_proxy);
+    let ip = client_ip(
+        req.headers(),
+        req.extensions().get::<ConnectInfo<SocketAddr>>(),
+        state.config.trust_proxy,
+        state.config.client_ip_header.as_deref(),
+    );
     req.extensions_mut().insert(ClientIp(ip));
 
     let mutating = !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
