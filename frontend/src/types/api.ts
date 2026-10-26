@@ -434,6 +434,21 @@ export interface CalendarEvent {
 
 export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly'
 
+/** One weekly class: course day `day_number` meets on ISO `weekday` (1 = Monday). */
+export interface ScheduleSlot {
+  day_number: number
+  weekday: number
+  /** HH:MM in the schedule timezone. */
+  start_time: string
+  end_time: string | null
+  location: string
+}
+
+export interface CourseSchedule {
+  timezone: string
+  slots: ScheduleSlot[]
+}
+
 export interface Recurrence {
   freq: RecurrenceFreq
   interval: number
@@ -454,7 +469,8 @@ export interface EventSeries {
 
 export interface CalendarEntry {
   id: string
-  kind: CalendarEventKind | 'deadline' | 'course_start' | 'course_end' | 'week_start'
+  /** `class`: a lesson placed on the course's weekly schedule. */
+  kind: CalendarEventKind | 'deadline' | 'course_start' | 'course_end' | 'week_start' | 'class'
   title: string
   description: string
   starts_at: string

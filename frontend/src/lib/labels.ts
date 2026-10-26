@@ -57,6 +57,7 @@ export const CALENDAR_KIND_LABELS: Record<CalendarEntry['kind'], string> = {
   course_start: 'Course start',
   course_end: 'Course end',
   week_start: 'Week start',
+  class: 'Class',
 }
 
 export const LAB_REPORT_SECTIONS: { key: keyof import('@/types/api').LabReport; label: string; hint: string; required?: boolean; rows: number }[] = [
@@ -77,14 +78,15 @@ export function emptyLabReport() {
 }
 
 export const WEEKDAYS = [
-  { n: 1, short: 'Mon', letter: 'M' },
-  { n: 2, short: 'Tue', letter: 'T' },
-  { n: 3, short: 'Wed', letter: 'W' },
-  { n: 4, short: 'Thu', letter: 'T' },
-  { n: 5, short: 'Fri', letter: 'F' },
-  { n: 6, short: 'Sat', letter: 'S' },
-  { n: 7, short: 'Sun', letter: 'S' },
+  { n: 1, short: 'Mon', long: 'Monday', letter: 'M' },
+  { n: 2, short: 'Tue', long: 'Tuesday', letter: 'T' },
+  { n: 3, short: 'Wed', long: 'Wednesday', letter: 'W' },
+  { n: 4, short: 'Thu', long: 'Thursday', letter: 'T' },
+  { n: 5, short: 'Fri', long: 'Friday', letter: 'F' },
+  { n: 6, short: 'Sat', long: 'Saturday', letter: 'S' },
+  { n: 7, short: 'Sun', long: 'Sunday', letter: 'S' },
 ]
+
 export const FREQ_UNIT: Record<RecurrenceFreq, [string, string]> = { daily: ['day', 'days'], weekly: ['week', 'weeks'], monthly: ['month', 'months'] }
 
 /** "Every 2 weeks on Mon, Wed, 4 times" */

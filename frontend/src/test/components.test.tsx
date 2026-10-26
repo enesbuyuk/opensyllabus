@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Navigate, Route, Routes } from 'react-router'
 import { Markdown } from '@/components/markdown'
@@ -8,8 +8,10 @@ import { LabReportForm } from '@/features/assignments/LabReportForm'
 import { SubmissionContent } from '@/features/assignments/SubmissionContent'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { emptyLabReport } from '@/lib/labels'
+import { ScheduleEditor } from '@/features/courses/ScheduleEditor'
 import { CalendarPage } from '@/pages/CalendarPage'
 import { LoginPage } from '@/pages/LoginPage'
+import type { CourseListItem } from '@/types/api'
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -139,12 +141,14 @@ describe('CalendarPage', () => {
     }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
-      const body = url.includes('/auth/me') ? { user: admin, csrf_token: 't' } : url.includes('/courses') ? [course] : url.includes('/calendar') ? [series] : {}
+      const cls = { ...series, id: 'class:l1', kind: 'class', title: 'W1 · Day 1', event_id: null, series: null, link: '/lessons/l1', starts_at: '2026-10-19T07:00:00.000Z' }
+      const body = url.includes('/auth/me') ? { user: admin, csrf_token: 't' } : url.includes('/courses') ? [course] : url.includes('/calendar') ? [cls, series] : {}
       return new Response(JSON.stringify(body), { status: 200 })
     }))
     render(wrap(<AuthProvider><CalendarPage /></AuthProvider>))
     await userEvent.click(await screen.findByRole('tab', { name: 'Agenda' }))
     expect(await screen.findByText(/Every week on Mon, Wed/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'W1 · Day 1' })).toHaveAttribute('href', '/lessons/l1')
 
     await userEvent.click(screen.getByRole('button', { name: /New event/ }))
     await userEvent.selectOptions(screen.getByLabelText('Repeat'), 'weekly')
@@ -152,5 +156,50 @@ describe('CalendarPage', () => {
     expect(screen.getByRole('button', { name: 'Mon' })).toHaveAttribute('aria-pressed', 'true')
     await userEvent.selectOptions(screen.getByLabelText('Repeat ends'), 'count')
     expect(screen.getByLabelText('Occurrences')).toHaveValue(10)
+  })
+})
+
+describe('ScheduleEditor', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('loads the schedule, validates times and saves the enabled days', async () => {
+    const admin = { id: 'a1', email: 'i@b.co', username: null, name: 'Hoca', role: 'admin', timezone: 'Europe/Istanbul' }
+    const saved = { timezone: 'Europe/Istanbul', slots: [{ day_number: 1, weekday: 1, start_time: '10:00', end_time: '12:00', location: 'Lab 2' }] }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/auth/me')) return new Response(JSON.stringify({ user: admin, csrf_token: 't' }), { status: 200 })
+      if (url.includes('/schedule') && init?.method === 'PUT') return new Response(String(init.body), { status: 200 })
+      if (url.includes('/schedule')) return new Response(JSON.stringify(saved), { status: 200 })
+      return new Response('{}', { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const course = { id: 'c1', title: 'Robot Eli', days_per_week: 3, start_date: '2026-10-19' } as unknown as CourseListItem
+    render(wrap(<AuthProvider><ScheduleEditor course={course} /></AuthProvider>))
+
+    const day1 = await screen.findByRole('group', { name: 'Day 1' })
+    expect(within(day1).getByLabelText('Location')).toHaveValue('Lab 2')
+    const day2 = screen.getByRole('group', { name: 'Day 2' })
+    expect(within(day2).getByLabelText('Starts')).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Schedule day 2' }))
+    const end = within(day2).getByLabelText('Ends')
+    await userEvent.clear(end)
+    await userEvent.type(end, '09:00')
+    expect(within(day2).getByRole('alert')).toHaveTextContent('End must be after the start')
+    expect(screen.getByRole('button', { name: 'Save schedule' })).toBeDisabled()
+
+    await userEvent.clear(end)
+    await userEvent.type(end, '16:00')
+    await userEvent.selectOptions(within(day2).getByLabelText('Weekday'), 'Wednesday')
+    await userEvent.click(screen.getByRole('button', { name: 'Save schedule' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => i?.method === 'PUT')).toBe(true))
+    const [, init] = fetchMock.mock.calls.find(([, i]) => i?.method === 'PUT')!
+    expect(JSON.parse(String(init?.body))).toEqual({
+      timezone: 'Europe/Istanbul',
+      slots: [
+        { day_number: 1, weekday: 1, start_time: '10:00', end_time: '12:00', location: 'Lab 2' },
+        { day_number: 2, weekday: 3, start_time: '10:00', end_time: '16:00', location: '' },
+      ],
+    })
   })
 })

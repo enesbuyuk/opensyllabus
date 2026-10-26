@@ -7,6 +7,7 @@ pub mod curriculum;
 pub mod notifications;
 pub mod progress;
 pub mod recurrence;
+pub mod schedule;
 pub mod seed;
 pub mod settings;
 pub mod storage;

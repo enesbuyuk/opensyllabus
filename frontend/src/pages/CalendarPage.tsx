@@ -35,6 +35,7 @@ const KIND_STYLE: Record<CalendarEntry['kind'], { dot: string; badge: BadgeVaria
   course_start: { dot: 'bg-success', badge: 'success' },
   course_end: { dot: 'bg-success', badge: 'success' },
   week_start: { dot: 'bg-muted-foreground/60', badge: 'outline' },
+  class: { dot: 'bg-chart-4', badge: 'secondary' },
 }
 
 function dayKey(e: CalendarEntry, tz: string) {
@@ -422,7 +423,7 @@ export function CalendarPage() {
     <>
       <PageHeader
         title="Calendar"
-        description={`Deadlines, sessions, laboratory activities and milestones · times in ${timezone}`}
+        description={`Classes, deadlines, sessions, laboratory activities and milestones · times in ${timezone}`}
         actions={
           <>
             <CourseSelect courses={courses.data ?? []} value={courseId} onChange={setCourseId} allowAll />
@@ -538,7 +539,7 @@ export function CalendarPage() {
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {(['deadline', 'session', 'lab', 'milestone', 'week_start'] as const).map((k) => (
+        {(['class', 'deadline', 'session', 'lab', 'milestone', 'week_start'] as const).map((k) => (
           <span key={k} className="flex items-center gap-1.5">
             <span className={cn('size-2 rounded-full', KIND_STYLE[k].dot)} /> {CALENDAR_KIND_LABELS[k]}
           </span>

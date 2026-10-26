@@ -10,11 +10,13 @@ use crate::{
     errors::{AppError, AppResult},
     middleware::ClientIp,
     models::{
-        course::{Course, CourseListItem, CreateCourseRequest, EnrollRequest, EnrollmentItem, UpdateCourseRequest},
+        course::{
+            Course, CourseListItem, CourseSchedule, CreateCourseRequest, EnrollRequest, EnrollmentItem, ScheduleSlot, UpdateCourseRequest,
+        },
         user::User,
     },
-    services::{audit, curriculum, progress, storage},
-    util::{clean_list, new_id, now, parse_opt_date, slugify, to_json, Validator},
+    services::{audit, curriculum, progress, schedule, storage},
+    util::{clean_list, is_valid_timezone, new_id, now, parse_opt_date, slugify, to_json, Validator},
     AppState,
 };
 
@@ -346,4 +348,84 @@ pub async fn unenroll(
     )
     .await;
     Ok(no_content())
+}
+
+/// The course's class schedule, ordered by course day. Empty slots use the platform timezone.
+pub async fn load_schedule(state: &AppState, course_id: &str) -> AppResult<CourseSchedule> {
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT timezone FROM course_schedule WHERE course_id = ? LIMIT 1").bind(course_id).fetch_all(&state.pool).await?;
+    let slots: Vec<ScheduleSlot> = sqlx::query_as(
+        "SELECT day_number, weekday, start_time, end_time, location FROM course_schedule WHERE course_id = ? ORDER BY day_number",
+    )
+    .bind(course_id)
+    .fetch_all(&state.pool)
+    .await?;
+    let timezone = rows.into_iter().next().map(|r| r.0).unwrap_or_else(|| state.timezone().name().to_string());
+    Ok(CourseSchedule { timezone, slots })
+}
+
+#[utoipa::path(get, path = "/api/v1/courses/{id}/schedule", tag = "courses", params(("id" = String, Path)), responses((status = 200, body = CourseSchedule)))]
+pub async fn schedule(State(state): State<AppState>, user: AuthUser, Path(id): Path<String>) -> AppResult<Response> {
+    access::course_for(&state.pool, &user, &id).await?;
+    Ok(json(load_schedule(&state, &id).await?))
+}
+
+/// Replaces the whole schedule; an empty `slots` list removes it.
+#[utoipa::path(put, path = "/api/v1/courses/{id}/schedule", tag = "courses", params(("id" = String, Path)), request_body = CourseSchedule, responses((status = 200, body = CourseSchedule)))]
+pub async fn update_schedule(
+    State(state): State<AppState>,
+    Extension(ip): Extension<ClientIp>,
+    admin: AdminUser,
+    Path(id): Path<String>,
+    ApiJson(req): ApiJson<CourseSchedule>,
+) -> AppResult<Response> {
+    let course = access::course_for(&state.pool, &admin, &id).await?;
+    let mut v = Validator::new();
+    v.check(is_valid_timezone(&req.timezone), "timezone", "Unknown timezone");
+    let mut days = std::collections::HashSet::new();
+    for s in &req.slots {
+        let start = schedule::parse_time(&s.start_time);
+        let end = s.end_time.as_deref().filter(|e| !e.is_empty()).map(schedule::parse_time);
+        let field = format!("slots.{}", s.day_number);
+        v.check(
+            (1..=course.days_per_week).contains(&s.day_number),
+            &field,
+            &format!("Course day must be between 1 and {}", course.days_per_week),
+        )
+        .check(days.insert(s.day_number), &field, "Each course day can only be scheduled once")
+        .check((1..=7).contains(&s.weekday), &field, "Choose a weekday")
+        .check(start.is_some(), &field, "Start time must be HH:MM")
+        .check(end.is_none_or(|e| e.is_some_and(|e| start.is_none_or(|s| e > s))), &field, "End time must be HH:MM and after the start")
+        .len(&s.location, &field, 0, 200);
+    }
+    v.finish()?;
+
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("DELETE FROM course_schedule WHERE course_id = ?").bind(&id).execute(&mut *tx).await?;
+    for s in &req.slots {
+        sqlx::query(
+            "INSERT INTO course_schedule (course_id, day_number, weekday, start_time, end_time, location, timezone) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&id)
+        .bind(s.day_number)
+        .bind(s.weekday)
+        .bind(&s.start_time)
+        .bind(s.end_time.as_deref().filter(|e| !e.is_empty()))
+        .bind(s.location.trim())
+        .bind(&req.timezone)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    audit::log(
+        &state.pool,
+        Some(&admin.id),
+        "course.schedule",
+        "course",
+        Some(&id),
+        serde_json::json!({ "slots": req.slots.len() }),
+        ip.0.as_deref(),
+    )
+    .await;
+    Ok(json(load_schedule(&state, &id).await?))
 }

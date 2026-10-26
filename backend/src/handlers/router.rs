@@ -50,6 +50,7 @@ fn api_routes(state: &AppState) -> Router<AppState> {
         .route("/courses", get(courses::list).post(courses::create))
         .route("/courses/{id}", get(courses::get).patch(courses::update).delete(courses::delete))
         .route("/courses/{id}/cover", post(courses::upload_cover).layer(upload_limit))
+        .route("/courses/{id}/schedule", get(courses::schedule).put(courses::update_schedule))
         .route("/courses/{id}/enrollments", get(courses::enrollments).post(courses::enroll))
         .route("/courses/{id}/enrollments/{user_id}", delete(courses::unenroll))
         .route("/courses/{id}/modules", post(curriculum::create_module))

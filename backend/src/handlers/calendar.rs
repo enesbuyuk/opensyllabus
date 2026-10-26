@@ -15,6 +15,7 @@ use crate::{
     services::{
         progress,
         recurrence::{self, Freq, Rule},
+        schedule,
     },
     util::{fmt_ts, from_json_vec, is_valid_timezone, new_id, now, parse_date, parse_opt_ts, parse_ts, to_json, Validator},
     AppState,
@@ -186,6 +187,7 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
                 }
             }
         }
+        out.extend(class_entries(&state, &user, &course, &from, &to, &today).await?);
         for (key, date, title) in milestones {
             if date.as_str() < &from[..10] || date.as_str() >= &to[..10] {
                 continue;
@@ -213,6 +215,72 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
     }
     out.sort_by(|a, b| a.starts_at.cmp(&b.starts_at));
     Ok(json(out))
+}
+
+/// Lessons placed on the course's weekly class schedule. Students see every class time; the
+/// lesson title and link only when they could open the lesson.
+async fn class_entries(
+    state: &AppState,
+    user: &crate::models::user::User,
+    course: &crate::models::course::Course,
+    from: &str,
+    to: &str,
+    today: &str,
+) -> AppResult<Vec<CalendarEntry>> {
+    let Some(start) = course.start_date.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()) else {
+        return Ok(vec![]);
+    };
+    let sched = super::courses::load_schedule(state, &course.id).await?;
+    if sched.slots.is_empty() {
+        return Ok(vec![]);
+    }
+    let (Some(win_from), Some(win_to)) = (utc(from), utc(to)) else { return Ok(vec![]) };
+    let tz: chrono_tz::Tz = sched.timezone.parse().unwrap_or(chrono_tz::UTC);
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        id: String,
+        title: String,
+        day_number: i64,
+        status: String,
+        week_status: String,
+        available_from: Option<String>,
+        week_number: i64,
+    }
+    let lessons: Vec<Row> = sqlx::query_as(
+        "SELECT l.id, l.title, l.day_number, l.status, w.status AS week_status, w.available_from, w.week_number
+         FROM lessons l JOIN weeks w ON w.id = l.week_id WHERE w.course_id = ? ORDER BY w.week_number, l.day_number, l.position",
+    )
+    .bind(&course.id)
+    .fetch_all(&state.pool)
+    .await?;
+    let mut out = Vec::new();
+    for Row { id: lesson_id, title, day_number: day, status: lesson_status, week_status, available_from, week_number } in lessons {
+        let Some(slot) = sched.slots.iter().find(|s| s.day_number == day) else { continue };
+        let Some(start_time) = schedule::parse_time(&slot.start_time) else { continue };
+        let date = schedule::class_date(start, week_number, slot.weekday as u32);
+        let (starts, ends) = schedule::class_times(date, start_time, slot.end_time.as_deref().and_then(schedule::parse_time), tz);
+        if starts >= win_to || ends.unwrap_or(starts) < win_from {
+            continue;
+        }
+        let open = user.is_admin()
+            || (lesson_status == "published" && week_status == "published" && available_from.as_deref().is_none_or(|d| d <= today));
+        out.push(CalendarEntry {
+            id: format!("class:{lesson_id}"),
+            kind: "class".into(),
+            title: if open { format!("W{week_number} · {title}") } else { format!("Week {week_number}, day {day}") },
+            description: String::new(),
+            starts_at: fmt_ts(starts),
+            ends_at: ends.map(fmt_ts),
+            all_day: false,
+            location: slot.location.clone(),
+            course_id: course.id.clone(),
+            course_title: course.title.clone(),
+            link: open.then(|| format!("/lessons/{lesson_id}")),
+            event_id: None,
+            series: None,
+        });
+    }
+    Ok(out)
 }
 
 struct Resolved {

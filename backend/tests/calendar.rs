@@ -113,3 +113,96 @@ async fn invalid_rules_are_rejected() {
         assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "rule {rule} body {}", r.body);
     }
 }
+
+#[tokio::test]
+async fn course_schedule_places_lessons_on_the_calendar() {
+    let app = TestApp::new().await;
+    let mut admin = app.admin().await;
+    let (course_id, week_id, lessons) = published_course(&mut admin).await;
+    // published_course leaves the week and its lessons as drafts.
+    admin.patch(&format!("/api/v1/weeks/{week_id}"), json!({ "status": "published" })).await.assert(StatusCode::OK);
+    for l in &lessons {
+        admin.patch(&format!("/api/v1/lessons/{l}"), json!({ "status": "published" })).await.assert(StatusCode::OK);
+    }
+    // Wednesday start: week 1 runs Wed 21 Oct .. Tue 27 Oct.
+    admin.patch(&format!("/api/v1/courses/{course_id}"), json!({ "start_date": "2026-10-21" })).await.assert(StatusCode::OK);
+    // Week 2 stays a draft: students see its class times, not its lessons.
+    admin
+        .post(&format!("/api/v1/courses/{course_id}/weeks"), json!({ "title": "Week 2", "create_day_lessons": true }))
+        .await
+        .assert(StatusCode::CREATED);
+
+    let empty = admin.get(&format!("/api/v1/courses/{course_id}/schedule")).await.assert(StatusCode::OK);
+    assert_eq!(empty.body["slots"], json!([]));
+
+    let schedule = json!({ "timezone": "Europe/Istanbul", "slots": [
+        { "day_number": 1, "weekday": 1, "start_time": "10:00", "end_time": "12:00", "location": "Lab 2" },
+        { "day_number": 2, "weekday": 3, "start_time": "14:00", "end_time": null },
+        { "day_number": 3, "weekday": 5, "start_time": "09:30", "end_time": "11:00" }
+    ]});
+    let r = admin.put(&format!("/api/v1/courses/{course_id}/schedule"), schedule).await.assert(StatusCode::OK);
+    assert_eq!(r.body["slots"].as_array().unwrap().len(), 3);
+
+    let classes = |body: &Value| -> Vec<(String, String, Value)> {
+        body.as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["kind"] == "class")
+            .map(|e| (e["starts_at"].as_str().unwrap().to_string(), e["title"].as_str().unwrap().to_string(), e["link"].clone()))
+            .collect()
+    };
+    let r = admin.get(&format!("/api/v1/calendar?{WINDOW}&course_id={course_id}")).await.assert(StatusCode::OK);
+    let c = classes(&r.body);
+    assert_eq!(
+        c.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(),
+        [
+            "2026-10-21T11:00:00.000Z", // W1 day 2: Wed 14:00
+            "2026-10-23T06:30:00.000Z", // W1 day 3: Fri 09:30
+            "2026-10-26T07:00:00.000Z", // W1 day 1: Mon 10:00
+            "2026-10-28T11:00:00.000Z", // W2 day 2
+            "2026-10-30T06:30:00.000Z", // W2 day 3
+            "2026-11-02T07:00:00.000Z", // W2 day 1
+        ]
+    );
+    let monday = r.body.as_array().unwrap().iter().find(|e| e["starts_at"] == "2026-10-26T07:00:00.000Z").unwrap();
+    assert_eq!(monday["ends_at"], "2026-10-26T09:00:00.000Z");
+    assert_eq!(monday["location"], "Lab 2");
+    assert_eq!(monday["link"], format!("/lessons/{}", lessons[0]));
+
+    create_student(&mut admin, "s1@example.com", &course_id).await;
+    let mut s = app.client();
+    s.login("s1@example.com", "student-pass-1").await.assert(StatusCode::OK);
+    let r = s.get(&format!("/api/v1/calendar?{WINDOW}&course_id={course_id}")).await.assert(StatusCode::OK);
+    let c = classes(&r.body);
+    assert_eq!(c.len(), 6, "students see every class time");
+    assert!(c[..3].iter().all(|x| x.1.starts_with("W1 · ") && x.2.is_string()));
+    assert!(c[3..].iter().all(|x| x.1.starts_with("Week 2, day ") && x.2.is_null()), "draft week: no lesson title or link");
+    s.get(&format!("/api/v1/courses/{course_id}/schedule")).await.assert(StatusCode::OK);
+    s.put(&format!("/api/v1/courses/{course_id}/schedule"), json!({ "timezone": "UTC", "slots": [] })).await.assert(StatusCode::FORBIDDEN);
+
+    // Clearing the schedule removes the classes.
+    admin.put(&format!("/api/v1/courses/{course_id}/schedule"), json!({ "timezone": "UTC", "slots": [] })).await.assert(StatusCode::OK);
+    let r = admin.get(&format!("/api/v1/calendar?{WINDOW}&course_id={course_id}")).await;
+    assert!(classes(&r.body).is_empty());
+}
+
+#[tokio::test]
+async fn invalid_schedules_are_rejected() {
+    let app = TestApp::new().await;
+    let mut admin = app.admin().await;
+    let (course_id, ..) = published_course(&mut admin).await;
+    for slots in [
+        json!([{ "day_number": 4, "weekday": 1, "start_time": "10:00" }]), // course has 3 days
+        json!([{ "day_number": 1, "weekday": 1, "start_time": "10:00" }, { "day_number": 1, "weekday": 2, "start_time": "10:00" }]),
+        json!([{ "day_number": 1, "weekday": 8, "start_time": "10:00" }]),
+        json!([{ "day_number": 1, "weekday": 1, "start_time": "25:00" }]),
+        json!([{ "day_number": 1, "weekday": 1, "start_time": "10:00", "end_time": "09:00" }]),
+    ] {
+        let r = admin.put(&format!("/api/v1/courses/{course_id}/schedule"), json!({ "timezone": "Europe/Istanbul", "slots": slots })).await;
+        assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "slots {slots} body {}", r.body);
+    }
+    admin
+        .put(&format!("/api/v1/courses/{course_id}/schedule"), json!({ "timezone": "Mars/Base", "slots": [] }))
+        .await
+        .assert(StatusCode::UNPROCESSABLE_ENTITY);
+}

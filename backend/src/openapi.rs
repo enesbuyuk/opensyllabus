@@ -15,7 +15,7 @@ use crate::handlers::*;
         auth::list_sessions, auth::revoke_session, auth::revoke_other_sessions,
         users::list, users::create, users::get, users::update, users::reset_link, users::revoke_sessions, users::update_profile,
         courses::list, courses::get, courses::create, courses::update, courses::delete, courses::upload_cover,
-        courses::enrollments, courses::enroll, courses::unenroll,
+        courses::enrollments, courses::enroll, courses::unenroll, courses::schedule, courses::update_schedule,
         curriculum::course_curriculum, curriculum::create_module, curriculum::update_module, curriculum::delete_module,
         curriculum::create_week, curriculum::generate_weeks, curriculum::get_week, curriculum::update_week, curriculum::delete_week,
         curriculum::duplicate_week, curriculum::create_lesson, curriculum::reorder_lessons, curriculum::get_lesson,

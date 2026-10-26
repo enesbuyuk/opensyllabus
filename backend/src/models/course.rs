@@ -90,3 +90,25 @@ pub struct EnrollmentItem {
     pub is_active: bool,
     pub enrolled_at: String,
 }
+
+/// One weekly class: course day `day_number` (the lessons' day) meets on `weekday`.
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize, ToSchema)]
+pub struct ScheduleSlot {
+    /// Course day, 1 to `days_per_week`.
+    pub day_number: i64,
+    /// ISO weekday: 1 = Monday ... 7 = Sunday.
+    pub weekday: i64,
+    /// HH:MM in the schedule timezone.
+    pub start_time: String,
+    pub end_time: Option<String>,
+    #[serde(default)]
+    pub location: String,
+}
+
+/// Weekly class times of a course. Lesson dates follow from the course start date.
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct CourseSchedule {
+    /// IANA timezone of the times.
+    pub timezone: String,
+    pub slots: Vec<ScheduleSlot>,
+}

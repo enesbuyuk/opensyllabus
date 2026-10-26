@@ -51,7 +51,7 @@ pub struct Occurrence {
 
 /// Local wall time to UTC. Ambiguous times take the earlier instant; times skipped by a
 /// DST jump move forward by an hour.
-fn to_utc(tz: Tz, local: NaiveDateTime) -> DateTime<Utc> {
+pub fn to_utc(tz: Tz, local: NaiveDateTime) -> DateTime<Utc> {
     let r = match tz.from_local_datetime(&local) {
         LocalResult::None => tz.from_local_datetime(&(local + Duration::hours(1))),
         other => other,

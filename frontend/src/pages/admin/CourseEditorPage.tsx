@@ -11,6 +11,7 @@ import { Field } from '@/components/form'
 import { ListEditor } from '@/components/list-editor'
 import { MarkdownEditor } from '@/components/markdown-editor'
 import { EmptyState, ErrorState, PageHeader, PageSkeleton } from '@/components/page'
+import { ScheduleEditor } from '@/features/courses/ScheduleEditor'
 import { PublishBadge } from '@/components/status'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -669,6 +670,7 @@ export function CourseEditorPage() {
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="curriculum">Curriculum</TabsTrigger>
+          <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="enrollment">Enrollment</TabsTrigger>
         </TabsList>
         <TabsContent value="details">
@@ -676,6 +678,9 @@ export function CourseEditorPage() {
         </TabsContent>
         <TabsContent value="curriculum">
           <CurriculumTab course={q.data} />
+        </TabsContent>
+        <TabsContent value="schedule">
+          <ScheduleEditor course={q.data} />
         </TabsContent>
         <TabsContent value="enrollment">
           <EnrollmentTab course={q.data} />

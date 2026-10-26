@@ -180,7 +180,7 @@ pub struct CalendarEventInput {
 #[derive(Serialize, ToSchema)]
 pub struct CalendarEntry {
     pub id: String,
-    /// `session`, `lab`, `milestone`, `other`, `deadline`, `course_start`, `course_end`, `week_start`.
+    /// `session`, `lab`, `milestone`, `other`, `deadline`, `course_start`, `course_end`, `week_start`, `class` (scheduled lesson).
     pub kind: String,
     pub title: String,
     pub description: String,
