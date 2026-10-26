@@ -24,7 +24,7 @@ import { useBreadcrumbs } from '@/lib/breadcrumbs'
 import { handleFormError } from '@/lib/errors'
 import { CALENDAR_KIND_LABELS, describeRecurrence, FREQ_UNIT, WEEKDAYS } from '@/lib/labels'
 import { cn, formatPlainDate, formatTime, isoToWallTime, todayIn, wallTimeToIso } from '@/lib/utils'
-import type { CalendarEntry } from '@/types/api'
+import type { CalendarEntry, RecurrenceFreq } from '@/types/api'
 
 const KIND_STYLE: Record<CalendarEntry['kind'], { dot: string; badge: BadgeVariant }> = {
   deadline: { dot: 'bg-destructive', badge: 'destructive' },
@@ -71,13 +71,15 @@ const eventSchema = z
 type EventForm = z.infer<typeof eventSchema>
 
 const NO_REPEAT = { repeat: 'none', interval: 1, weekdays: [], end_mode: 'never', until: '', count: 10 } as const
+// The dialog's hooks run while it is closed too: every field needs a value before the first reset().
+const EMPTY_EVENT: EventForm = { course_id: '', title: '', kind: 'session', starts_at: '', ends_at: '', location: '', description: '', ...NO_REPEAT, weekdays: [] }
 
 function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean; onOpenChange: (o: boolean) => void; entry: CalendarEntry | null; defaultDate?: string }) {
   const { timezone } = useAuth()
   const courses = useCourses()
   const qc = useQueryClient()
   const [confirm, setConfirm] = React.useState(false)
-  const form = useForm<EventForm>({ resolver: zodResolver(eventSchema) })
+  const form = useForm<EventForm>({ resolver: zodResolver(eventSchema), defaultValues: EMPTY_EVENT })
   const series = entry?.series ?? null
   // A repeating event keeps the timezone it was created in; show its times there.
   const tz = series?.timezone ?? timezone
@@ -180,7 +182,7 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
     },
   })
   const { errors, isSubmitting } = form.formState
-  const unit = repeat !== 'none' ? FREQ_UNIT[repeat][interval === 1 ? 0 : 1] : ''
+  const unit = repeat in FREQ_UNIT ? FREQ_UNIT[repeat as RecurrenceFreq][interval === 1 ? 0 : 1] : ''
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -277,7 +279,7 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
             )}
             {repeat !== 'none' && (
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Ends" htmlFor="ev-endmode">
+                <Field label="Repeat ends" htmlFor="ev-endmode">
                   <NativeSelect id="ev-endmode" {...form.register('end_mode')}>
                     <option value="never">Never</option>
                     <option value="until">On a date</option>

@@ -8,6 +8,7 @@ import { LabReportForm } from '@/features/assignments/LabReportForm'
 import { SubmissionContent } from '@/features/assignments/SubmissionContent'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { emptyLabReport } from '@/lib/labels'
+import { CalendarPage } from '@/pages/CalendarPage'
 import { LoginPage } from '@/pages/LoginPage'
 
 function wrap(ui: React.ReactNode) {
@@ -122,5 +123,34 @@ describe('LoginPage', () => {
     await waitFor(() => expect(screen.getByText('Welcome Ayşe')).toBeInTheDocument())
     const [, init] = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/auth/login'))!
     expect(JSON.parse(String(init?.body))).toEqual({ login: 'ayse', password: 'student-pass-1' })
+  })
+})
+
+describe('CalendarPage', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('renders for an instructor and opens the repeat options of a new event', async () => {
+    const admin = { id: 'a1', email: 'i@b.co', username: 'hoca', name: 'Hoca', role: 'admin', timezone: 'Europe/Istanbul' }
+    const course = { id: 'c1', title: 'Robot Eli', status: 'published' }
+    const series = {
+      id: 'event:e1:2026-10-21', kind: 'lab', title: 'Lab', description: '', starts_at: '2026-10-21T07:00:00.000Z', ends_at: null, all_day: false,
+      location: '', course_id: 'c1', course_title: 'Robot Eli', link: null, event_id: 'e1',
+      series: { recurrence: { freq: 'weekly', interval: 1, weekdays: [1, 3], until: null, count: null }, starts_at: '2026-10-19T07:00:00.000Z', ends_at: null, timezone: 'Europe/Istanbul', occurrence_date: '2026-10-21' },
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const body = url.includes('/auth/me') ? { user: admin, csrf_token: 't' } : url.includes('/courses') ? [course] : url.includes('/calendar') ? [series] : {}
+      return new Response(JSON.stringify(body), { status: 200 })
+    }))
+    render(wrap(<AuthProvider><CalendarPage /></AuthProvider>))
+    await userEvent.click(await screen.findByRole('tab', { name: 'Agenda' }))
+    expect(await screen.findByText(/Every week on Mon, Wed/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /New event/ }))
+    await userEvent.selectOptions(screen.getByLabelText('Repeat'), 'weekly')
+    expect(screen.getByRole('group', { name: 'On' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mon' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.selectOptions(screen.getByLabelText('Repeat ends'), 'count')
+    expect(screen.getByLabelText('Occurrences')).toHaveValue(10)
   })
 })
