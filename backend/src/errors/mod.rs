@@ -15,7 +15,7 @@ pub type AppResult<T> = Result<T, AppError>;
 pub enum AppError {
     #[error("authentication required")]
     Unauthorized,
-    #[error("Invalid email or password")]
+    #[error("Invalid email, username or password")]
     InvalidCredentials,
     #[error("{0}")]
     Forbidden(String),

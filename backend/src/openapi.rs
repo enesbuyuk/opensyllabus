@@ -29,7 +29,7 @@ use crate::handlers::*;
         resources::list, resources::get, resources::create, resources::update, resources::delete,
         announcements::list, announcements::create, announcements::update, announcements::delete,
         notifications::list, notifications::mark_read, notifications::mark_all_read,
-        calendar::entries, calendar::create, calendar::update, calendar::delete,
+        calendar::entries, calendar::create, calendar::update, calendar::skip_occurrence, calendar::delete,
         progress::my_progress, progress::course_progress, progress::student_progress, progress::gradebook, progress::gradebook_csv,
         dashboard::dashboard, analytics::analytics, search::search,
         settings::get, settings::update, settings::audit_logs,

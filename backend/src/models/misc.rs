@@ -97,8 +97,67 @@ pub struct CalendarEvent {
     pub starts_at: String,
     pub ends_at: Option<String>,
     pub location: String,
+    /// IANA timezone a repeating event keeps its wall-clock time in.
+    pub timezone: String,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip)]
+    pub repeat_freq: Option<String>,
+    #[serde(skip)]
+    pub repeat_interval: i64,
+    #[serde(skip)]
+    pub repeat_weekdays: String,
+    #[serde(skip)]
+    pub repeat_until: Option<String>,
+    #[serde(skip)]
+    pub repeat_count: Option<i64>,
+    #[serde(skip)]
+    pub repeat_exceptions: String,
+    /// Set for a repeating event; `starts_at` / `ends_at` are its first occurrence.
+    #[sqlx(skip)]
+    pub recurrence: Option<Recurrence>,
+    /// Occurrence dates removed from the series (YYYY-MM-DD).
+    #[sqlx(skip)]
+    pub skipped_dates: Vec<String>,
+}
+
+/// Repeat rule of a calendar event.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Recurrence {
+    /// `daily`, `weekly` or `monthly`; in a request, `none` makes the event non-repeating.
+    pub freq: String,
+    /// Every N days / weeks / months (1-99).
+    #[serde(default = "one")]
+    pub interval: i64,
+    /// Weekly rules: ISO weekdays (1 = Monday ... 7 = Sunday). Empty = the weekday of the start.
+    #[serde(default)]
+    pub weekdays: Vec<u32>,
+    /// Last occurrence date, inclusive (YYYY-MM-DD in the event timezone). At most one of until / count.
+    pub until: Option<String>,
+    /// Number of occurrences (1-500).
+    pub count: Option<i64>,
+}
+
+fn one() -> i64 {
+    1
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct SkipOccurrenceRequest {
+    /// Occurrence date to remove from the series (YYYY-MM-DD).
+    pub date: String,
+}
+
+/// Series details on a calendar entry that is one occurrence of a repeating event.
+#[derive(Serialize, ToSchema)]
+pub struct EventSeries {
+    pub recurrence: Recurrence,
+    /// First occurrence of the series.
+    pub starts_at: String,
+    pub ends_at: Option<String>,
+    pub timezone: String,
+    /// This occurrence's date in the series timezone (YYYY-MM-DD).
+    pub occurrence_date: String,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -111,6 +170,10 @@ pub struct CalendarEventInput {
     /// Empty string clears.
     pub ends_at: Option<String>,
     pub location: Option<String>,
+    /// Omitted: unchanged. `{"freq": "none"}` stops repeating.
+    pub recurrence: Option<Recurrence>,
+    /// IANA timezone for a repeating event; defaults to the platform timezone.
+    pub timezone: Option<String>,
 }
 
 /// Unified calendar entry: instructor-defined events, assignment deadlines and course milestones.
@@ -130,6 +193,8 @@ pub struct CalendarEntry {
     pub link: Option<String>,
     /// Only for instructor-defined events (editable).
     pub event_id: Option<String>,
+    /// Set when the entry is one occurrence of a repeating event.
+    pub series: Option<EventSeries>,
 }
 
 #[derive(Serialize, sqlx::FromRow, ToSchema)]

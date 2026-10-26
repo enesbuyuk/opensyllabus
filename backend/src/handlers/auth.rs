@@ -35,22 +35,28 @@ pub async fn login(
     headers: HeaderMap,
     ApiJson(req): ApiJson<LoginRequest>,
 ) -> AppResult<Response> {
-    let email = req.email.trim().to_lowercase();
+    // Email when it contains "@" (usernames never do), username otherwise.
+    let login = req.login.trim().to_lowercase();
     let ip_key = format!("login-ip:{}", ip.0.as_deref().unwrap_or("unknown"));
-    let email_key = format!("login-email:{email}");
     state.rate_limiter.check(&ip_key, 30, WINDOW)?;
-    state.rate_limiter.check(&email_key, 10, WINDOW)?;
 
-    let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE email = ?").bind(&email).fetch_optional(&state.pool).await?;
+    let sql = if login.contains('@') { "SELECT * FROM users WHERE email = ?" } else { "SELECT * FROM users WHERE username = ?" };
+    let user: Option<User> = sqlx::query_as(sql).bind(&login).fetch_optional(&state.pool).await?;
+    // Per account, so the email and the username share one budget.
+    let account_key = match &user {
+        Some(u) => format!("login-user:{}", u.id),
+        None => format!("login-id:{login}"),
+    };
+    state.rate_limiter.check(&account_key, 10, WINDOW)?;
     let ok = password::verify(req.password.clone(), user.as_ref().map(|u| u.password_hash.clone())).await;
     let user = match user {
         Some(u) if ok && u.is_active => u,
         _ => {
-            audit::log(&state.pool, None, "auth.login_failed", "user", None, serde_json::json!({ "email": email }), ip.0.as_deref()).await;
+            audit::log(&state.pool, None, "auth.login_failed", "user", None, serde_json::json!({ "login": login }), ip.0.as_deref()).await;
             return Err(AppError::InvalidCredentials);
         }
     };
-    state.rate_limiter.reset(&email_key);
+    state.rate_limiter.reset(&account_key);
 
     let ua = headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok());
     let s = session::create(&state.pool, &state.config, &user.id, ip.0.as_deref(), ua).await?;

@@ -5,6 +5,7 @@ export type Role = 'admin' | 'student'
 export interface User {
   id: string
   email: string
+  username: string | null
   name: string
   role: Role
   timezone: string
@@ -426,6 +427,29 @@ export interface CalendarEvent {
   starts_at: string
   ends_at: string | null
   location: string
+  timezone: string
+  recurrence: Recurrence | null
+  skipped_dates: string[]
+}
+
+export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly'
+
+export interface Recurrence {
+  freq: RecurrenceFreq
+  interval: number
+  /** ISO weekdays, 1 = Monday ... 7 = Sunday (weekly rules). */
+  weekdays: number[]
+  until: string | null
+  count: number | null
+}
+
+/** Set on a calendar entry that is one occurrence of a repeating event. */
+export interface EventSeries {
+  recurrence: Recurrence
+  starts_at: string
+  ends_at: string | null
+  timezone: string
+  occurrence_date: string
 }
 
 export interface CalendarEntry {
@@ -441,6 +465,7 @@ export interface CalendarEntry {
   course_title: string
   link: string | null
   event_id: string | null
+  series: EventSeries | null
 }
 
 export interface WeekProgress {

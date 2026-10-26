@@ -33,6 +33,9 @@ enum Command {
     CreateAdmin {
         #[arg(long)]
         email: String,
+        /// Optional login name (sign-in accepts it instead of the email).
+        #[arg(long)]
+        username: Option<String>,
         #[arg(long, default_value = "Instructor")]
         name: String,
     },
@@ -94,11 +97,12 @@ async fn main() -> Result<()> {
             println!("Migrations applied to {}", config.database_path.display());
             Ok(())
         }
-        Command::CreateAdmin { email, name } => {
+        Command::CreateAdmin { email, username, name } => {
             let password = read_password()?;
-            let user = accounts::create_user(&pool, &email, &name, Role::Admin, Some(password), &config.default_timezone)
-                .await
-                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            let user =
+                accounts::create_user(&pool, &email, username.as_deref(), &name, Role::Admin, Some(password), &config.default_timezone)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             accounts::adopt_orphan_courses(&pool).await.map_err(|e| anyhow::anyhow!("{e}"))?;
             println!("Administrator {} created.", user.email);
             Ok(())

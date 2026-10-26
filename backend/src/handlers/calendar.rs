@@ -2,6 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     response::Response,
 };
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -9,10 +10,13 @@ use super::{created, json, no_content, ApiJson};
 use crate::{
     auth::{access, AdminUser, AuthUser},
     errors::{AppError, AppResult},
-    models::misc::{CalendarEntry, CalendarEvent, CalendarEventInput},
+    models::misc::{CalendarEntry, CalendarEvent, CalendarEventInput, EventSeries, Recurrence, SkipOccurrenceRequest},
     repositories::assignments::{self as assignment_repo, AssignmentFilter},
-    services::progress,
-    util::{new_id, now, parse_opt_ts, parse_ts, Validator},
+    services::{
+        progress,
+        recurrence::{self, Freq, Rule},
+    },
+    util::{fmt_ts, from_json_vec, is_valid_timezone, new_id, now, parse_date, parse_opt_ts, parse_ts, to_json, Validator},
     AppState,
 };
 
@@ -28,7 +32,79 @@ pub struct CalendarQuery {
 }
 
 const EVENT_SELECT: &str = "SELECT e.id, e.course_id, c.title AS course_title, e.title, e.description, e.kind, e.starts_at, e.ends_at,
-    e.location, e.created_at, e.updated_at FROM calendar_events e JOIN courses c ON c.id = e.course_id";
+    e.location, e.timezone, e.created_at, e.updated_at, e.repeat_freq, e.repeat_interval, e.repeat_weekdays, e.repeat_until,
+    e.repeat_count, e.repeat_exceptions FROM calendar_events e JOIN courses c ON c.id = e.course_id";
+
+fn utc(ts: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(ts).ok().map(|t| t.with_timezone(&Utc))
+}
+
+/// Fills `recurrence` / `skipped_dates` from the stored columns.
+fn with_series(mut e: CalendarEvent) -> CalendarEvent {
+    e.recurrence = e.repeat_freq.clone().map(|freq| Recurrence {
+        freq,
+        interval: e.repeat_interval,
+        weekdays: e.repeat_weekdays.split(',').filter_map(|d| d.trim().parse().ok()).collect(),
+        until: e.repeat_until.clone(),
+        count: e.repeat_count,
+    });
+    e.skipped_dates = from_json_vec(&e.repeat_exceptions);
+    e
+}
+
+fn rule_of(e: &CalendarEvent) -> Option<Rule> {
+    let r = e.recurrence.as_ref()?;
+    Some(Rule {
+        freq: Freq::parse(&r.freq)?,
+        interval: r.interval.clamp(1, 99) as u32,
+        weekdays: r.weekdays.clone(),
+        until: r.until.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
+        count: r.count.map(|c| c.clamp(1, 500) as u32),
+        exceptions: e.skipped_dates.iter().filter_map(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()).collect(),
+    })
+}
+
+fn event_entry(e: &CalendarEvent, starts_at: String, ends_at: Option<String>, series: Option<EventSeries>) -> CalendarEntry {
+    CalendarEntry {
+        id: match &series {
+            Some(s) => format!("event:{}:{}", e.id, s.occurrence_date),
+            None => format!("event:{}", e.id),
+        },
+        kind: e.kind.clone(),
+        title: e.title.clone(),
+        description: e.description.clone(),
+        starts_at,
+        ends_at,
+        all_day: false,
+        location: e.location.clone(),
+        course_id: e.course_id.clone(),
+        course_title: e.course_title.clone(),
+        link: None,
+        event_id: Some(e.id.clone()),
+        series,
+    }
+}
+
+/// The event itself, or each occurrence of a repeating event inside `[from, to)`.
+fn event_entries(e: &CalendarEvent, from: &str, to: &str) -> Vec<CalendarEntry> {
+    let (Some(rule), Some(start), Some(win_from), Some(win_to)) = (rule_of(e), utc(&e.starts_at), utc(from), utc(to)) else {
+        return vec![event_entry(e, e.starts_at.clone(), e.ends_at.clone(), None)];
+    };
+    let tz = e.timezone.parse().unwrap_or(chrono_tz::UTC);
+    recurrence::expand(start, e.ends_at.as_deref().and_then(utc), tz, &rule, win_from, win_to)
+        .into_iter()
+        .map(|o| {
+            let series = EventSeries {
+                recurrence: e.recurrence.clone().expect("rule_of checked it"),
+                starts_at: e.starts_at.clone(),
+                ends_at: e.ends_at.clone(),
+                timezone: e.timezone.clone(),
+                occurrence_date: o.date.to_string(),
+            };
+            event_entry(e, fmt_ts(o.starts_at), o.ends_at.map(fmt_ts), Some(series))
+        })
+        .collect()
+}
 
 #[utoipa::path(get, path = "/api/v1/calendar", tag = "calendar", params(CalendarQuery), responses((status = 200, body = [CalendarEntry])))]
 pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Query<CalendarQuery>) -> AppResult<Response> {
@@ -46,28 +122,17 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
     let today = state.today();
     for cid in course_ids.iter().filter(|c| q.course_id.as_deref().is_none_or(|f| f == c.as_str())) {
         let course = access::course_for(&state.pool, &user, cid).await?;
-        let events: Vec<CalendarEvent> =
-            sqlx::query_as(&format!("{EVENT_SELECT} WHERE e.course_id = ? AND e.starts_at < ? AND COALESCE(e.ends_at, e.starts_at) >= ?"))
-                .bind(cid)
-                .bind(&to)
-                .bind(&from)
-                .fetch_all(&state.pool)
-                .await?;
-        for e in events {
-            out.push(CalendarEntry {
-                id: format!("event:{}", e.id),
-                kind: e.kind,
-                title: e.title,
-                description: e.description,
-                starts_at: e.starts_at,
-                ends_at: e.ends_at,
-                all_day: false,
-                location: e.location,
-                course_id: e.course_id,
-                course_title: e.course_title,
-                link: None,
-                event_id: Some(e.id),
-            });
+        // Repeating events are filtered by expanding them.
+        let events: Vec<CalendarEvent> = sqlx::query_as(&format!(
+            "{EVENT_SELECT} WHERE e.course_id = ? AND e.starts_at < ? AND (e.repeat_freq IS NOT NULL OR COALESCE(e.ends_at, e.starts_at) >= ?)"
+        ))
+        .bind(cid)
+        .bind(&to)
+        .bind(&from)
+        .fetch_all(&state.pool)
+        .await?;
+        for e in events.into_iter().map(with_series) {
+            out.extend(event_entries(&e, &from, &to));
         }
         let assignments = assignment_repo::list(
             &state.pool,
@@ -95,6 +160,7 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
                 course_title: course.title.clone(),
                 link: Some(format!("/assignments/{}", a.assignment.id)),
                 event_id: None,
+                series: None,
             });
         }
         // Course milestones derived from the course dates (all-day, dated in the platform timezone).
@@ -141,6 +207,7 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
                 course_title: course.title.clone(),
                 link,
                 event_id: None,
+                series: None,
             });
         }
     }
@@ -155,9 +222,37 @@ struct Resolved {
     starts_at: String,
     ends_at: Option<String>,
     location: String,
+    timezone: String,
+    recurrence: Option<Recurrence>,
 }
 
-fn resolve(req: CalendarEventInput, base: Option<&CalendarEvent>) -> AppResult<Resolved> {
+/// Validates a repeat rule; `None` for `freq: "none"`.
+fn clean_recurrence(r: Recurrence, starts_at: &str, timezone: &str) -> AppResult<Option<Recurrence>> {
+    if r.freq == "none" {
+        return Ok(None);
+    }
+    let mut weekdays = if r.freq == "weekly" { r.weekdays } else { vec![] };
+    weekdays.sort_unstable();
+    weekdays.dedup();
+    let until = r.until.map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
+    let start_date = utc(starts_at)
+        .map(|t| t.with_timezone(&timezone.parse::<chrono_tz::Tz>().unwrap_or(chrono_tz::UTC)).date_naive())
+        .unwrap_or_default();
+    let mut v = Validator::new();
+    v.check(Freq::parse(&r.freq).is_some(), "recurrence", "Repeat must be daily, weekly or monthly")
+        .check((1..=99).contains(&r.interval), "recurrence", "Repeat interval must be between 1 and 99")
+        .check(weekdays.iter().all(|d| (1..=7).contains(d)), "recurrence", "Unknown weekday")
+        .check(r.count.is_none_or(|c| (1..=500).contains(&c)), "recurrence", "Number of occurrences must be between 1 and 500")
+        .check(until.is_none() || r.count.is_none(), "recurrence", "Choose an end date or a number of occurrences, not both");
+    if let Some(u) = &until {
+        let d = parse_date("recurrence", u)?;
+        v.check(d >= start_date, "recurrence", "The repeat end date must be on or after the start");
+    }
+    v.finish()?;
+    Ok(Some(Recurrence { freq: r.freq, interval: r.interval, weekdays, until, count: r.count }))
+}
+
+fn resolve(req: CalendarEventInput, base: Option<&CalendarEvent>, default_tz: &str) -> AppResult<Resolved> {
     let starts_at = match (req.starts_at, base) {
         (Some(s), _) => parse_ts("starts_at", &s)?,
         (None, Some(b)) => b.starts_at.clone(),
@@ -167,6 +262,18 @@ fn resolve(req: CalendarEventInput, base: Option<&CalendarEvent>) -> AppResult<R
         Some(e) => parse_opt_ts("ends_at", Some(&e))?,
         None => base.and_then(|b| b.ends_at.clone()),
     };
+    let timezone = req.timezone.or(base.map(|b| b.timezone.clone())).unwrap_or_else(|| default_tz.to_string());
+    if !is_valid_timezone(&timezone) {
+        return Err(AppError::field("timezone", "Unknown timezone"));
+    }
+    let recurrence = match req.recurrence {
+        Some(r) => clean_recurrence(r, &starts_at, &timezone)?,
+        None => match base.and_then(|b| b.recurrence.clone()) {
+            // Re-check against a changed start or timezone.
+            Some(r) => clean_recurrence(r, &starts_at, &timezone)?,
+            None => None,
+        },
+    };
     let r = Resolved {
         title: req.title.or(base.map(|b| b.title.clone())).unwrap_or_default().trim().to_string(),
         description: req.description.or(base.map(|b| b.description.clone())).unwrap_or_default(),
@@ -174,6 +281,8 @@ fn resolve(req: CalendarEventInput, base: Option<&CalendarEvent>) -> AppResult<R
         location: req.location.or(base.map(|b| b.location.clone())).unwrap_or_default(),
         starts_at,
         ends_at,
+        timezone,
+        recurrence,
     };
     Validator::new()
         .len(&r.title, "title", 1, 200)
@@ -186,19 +295,26 @@ fn resolve(req: CalendarEventInput, base: Option<&CalendarEvent>) -> AppResult<R
 }
 
 async fn load(state: &AppState, id: &str) -> AppResult<CalendarEvent> {
-    sqlx::query_as(&format!("{EVENT_SELECT} WHERE e.id = ?")).bind(id).fetch_optional(&state.pool).await?.ok_or(AppError::NotFound("Event"))
+    let e: CalendarEvent = sqlx::query_as(&format!("{EVENT_SELECT} WHERE e.id = ?"))
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or(AppError::NotFound("Event"))?;
+    Ok(with_series(e))
 }
 
 #[utoipa::path(post, path = "/api/v1/calendar/events", tag = "calendar", request_body = CalendarEventInput, responses((status = 201, body = CalendarEvent)))]
 pub async fn create(State(state): State<AppState>, admin: AdminUser, ApiJson(req): ApiJson<CalendarEventInput>) -> AppResult<Response> {
     let course_id = req.course_id.clone().ok_or_else(|| AppError::field("course_id", "Select a course"))?;
     access::course_for(&state.pool, &admin, &course_id).await?;
-    let r = resolve(req, None)?;
+    let r = resolve(req, None, state.timezone().name())?;
     let id = new_id();
     let ts = now();
+    let rec = r.recurrence.as_ref();
     sqlx::query(
-        "INSERT INTO calendar_events (id, course_id, title, description, kind, starts_at, ends_at, location, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO calendar_events (id, course_id, title, description, kind, starts_at, ends_at, location, timezone, repeat_freq,
+            repeat_interval, repeat_weekdays, repeat_until, repeat_count, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&course_id)
@@ -208,12 +324,22 @@ pub async fn create(State(state): State<AppState>, admin: AdminUser, ApiJson(req
     .bind(&r.starts_at)
     .bind(&r.ends_at)
     .bind(r.location.trim())
+    .bind(&r.timezone)
+    .bind(rec.map(|x| x.freq.clone()))
+    .bind(rec.map_or(1, |x| x.interval))
+    .bind(rec.map(|x| weekdays_column(&x.weekdays)).unwrap_or_default())
+    .bind(rec.and_then(|x| x.until.clone()))
+    .bind(rec.and_then(|x| x.count))
     .bind(&admin.id)
     .bind(&ts)
     .bind(&ts)
     .execute(&state.pool)
     .await?;
     Ok(created(load(&state, &id).await?))
+}
+
+fn weekdays_column(days: &[u32]) -> String {
+    days.iter().map(u32::to_string).collect::<Vec<_>>().join(",")
 }
 
 #[utoipa::path(patch, path = "/api/v1/calendar/events/{id}", tag = "calendar", params(("id" = String, Path)), request_body = CalendarEventInput, responses((status = 200, body = CalendarEvent)))]
@@ -224,14 +350,54 @@ pub async fn update(
     ApiJson(req): ApiJson<CalendarEventInput>,
 ) -> AppResult<Response> {
     let e = load(&state, &id).await?;
-    let r = resolve(req, Some(&e))?;
-    sqlx::query("UPDATE calendar_events SET title = ?, description = ?, kind = ?, starts_at = ?, ends_at = ?, location = ?, updated_at = ? WHERE id = ?")
-        .bind(&r.title)
-        .bind(r.description.trim())
-        .bind(&r.kind)
-        .bind(&r.starts_at)
-        .bind(&r.ends_at)
-        .bind(r.location.trim())
+    let r = resolve(req, Some(&e), state.timezone().name())?;
+    let rec = r.recurrence.as_ref();
+    // Skipped dates belong to the old pattern; a series that stops repeating drops them.
+    let exceptions = if rec.is_some() { to_json(&e.skipped_dates) } else { "[]".to_string() };
+    sqlx::query(
+        "UPDATE calendar_events SET title = ?, description = ?, kind = ?, starts_at = ?, ends_at = ?, location = ?, timezone = ?,
+            repeat_freq = ?, repeat_interval = ?, repeat_weekdays = ?, repeat_until = ?, repeat_count = ?, repeat_exceptions = ?,
+            updated_at = ? WHERE id = ?",
+    )
+    .bind(&r.title)
+    .bind(r.description.trim())
+    .bind(&r.kind)
+    .bind(&r.starts_at)
+    .bind(&r.ends_at)
+    .bind(r.location.trim())
+    .bind(&r.timezone)
+    .bind(rec.map(|x| x.freq.clone()))
+    .bind(rec.map_or(1, |x| x.interval))
+    .bind(rec.map(|x| weekdays_column(&x.weekdays)).unwrap_or_default())
+    .bind(rec.and_then(|x| x.until.clone()))
+    .bind(rec.and_then(|x| x.count))
+    .bind(exceptions)
+    .bind(now())
+    .bind(&id)
+    .execute(&state.pool)
+    .await?;
+    Ok(json(load(&state, &id).await?))
+}
+
+#[utoipa::path(post, path = "/api/v1/calendar/events/{id}/skip", tag = "calendar", params(("id" = String, Path)), request_body = SkipOccurrenceRequest, responses((status = 200, body = CalendarEvent)))]
+pub async fn skip_occurrence(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path(id): Path<String>,
+    ApiJson(req): ApiJson<SkipOccurrenceRequest>,
+) -> AppResult<Response> {
+    let e = load(&state, &id).await?;
+    if e.recurrence.is_none() {
+        return Err(AppError::bad_request("This event does not repeat; delete it instead"));
+    }
+    let date = parse_date("date", req.date.trim())?.to_string();
+    let mut skipped = e.skipped_dates.clone();
+    if !skipped.contains(&date) {
+        skipped.push(date);
+        skipped.sort();
+    }
+    sqlx::query("UPDATE calendar_events SET repeat_exceptions = ?, updated_at = ? WHERE id = ?")
+        .bind(to_json(&skipped))
         .bind(now())
         .bind(&id)
         .execute(&state.pool)

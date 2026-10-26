@@ -10,7 +10,7 @@ import { errorMessage } from '@/lib/errors'
 import { AuthShell } from './AuthShell'
 
 const schema = z.object({
-  email: z.string().trim().min(1, 'Enter your email address').email('Enter a valid email address'),
+  login: z.string().trim().min(1, 'Enter your email or username'),
   password: z.string().min(1, 'Enter your password'),
 })
 type FormValues = z.infer<typeof schema>
@@ -20,13 +20,13 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
-  const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: '', password: '' } })
+  const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { login: '', password: '' } })
 
   if (!loading && user) return <Navigate to={from} replace />
 
   const onSubmit = form.handleSubmit(async (v) => {
     try {
-      await login(v.email, v.password)
+      await login(v.login, v.password)
       navigate(from, { replace: true })
     } catch (e) {
       form.setError('root', { message: errorMessage(e) })
@@ -42,8 +42,8 @@ export function LoginPage() {
             {errors.root.message}
           </div>
         )}
-        <Field label="Email" htmlFor="email" error={errors.email?.message}>
-          <Input id="email" type="email" autoComplete="username" autoFocus aria-invalid={!!errors.email} {...form.register('email')} />
+        <Field label="Email or username" htmlFor="login" error={errors.login?.message}>
+          <Input id="login" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus aria-invalid={!!errors.login} {...form.register('login')} />
         </Field>
         <Field label="Password" htmlFor="password" error={errors.password?.message}>
           <Input id="password" type="password" autoComplete="current-password" aria-invalid={!!errors.password} {...form.register('password')} />

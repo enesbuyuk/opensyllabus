@@ -122,7 +122,64 @@ async fn security_headers_present() {
     let r = app.client().get("/api/health").await.assert(StatusCode::OK);
     assert_eq!(r.headers.get("x-content-type-options").unwrap(), "nosniff");
     assert_eq!(r.headers.get("x-frame-options").unwrap(), "DENY");
-    assert!(r.headers.get("content-security-policy").is_some());
+    let csp = r.headers.get("content-security-policy").unwrap().to_str().unwrap();
+    assert!(csp.contains("frame-src 'self'"), "file previews are framed from the same origin: {csp}");
+    assert!(csp.contains("frame-ancestors 'none'"));
     app.client().get("/api/v1/does-not-exist").await.assert(StatusCode::NOT_FOUND);
     app.client().get("/api/nope").await.assert(StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn login_with_email_or_username() {
+    let app = TestApp::new().await;
+    let mut admin = app.admin().await;
+    let r = admin
+        .post("/api/v1/users", json!({ "email": "ayse@example.com", "username": "Ayse.K", "name": "Ayşe", "password": "student-pass-1" }))
+        .await
+        .assert(StatusCode::CREATED);
+    assert_eq!(r.body["user"]["username"], "ayse.k");
+
+    // Username (case-insensitive) and email both work; the old `email` field name is still accepted.
+    app.client().login("AYSE.K", "student-pass-1").await.assert(StatusCode::OK);
+    app.client().login("ayse@example.com", "student-pass-1").await.assert(StatusCode::OK);
+    app.client().post("/api/v1/auth/login", json!({ "login": "ayse.k", "password": "student-pass-1" })).await.assert(StatusCode::OK);
+    app.client().login("ayse.k", "wrong-password-1").await.assert(StatusCode::UNAUTHORIZED);
+
+    // Taken and invalid usernames are field errors.
+    let r = admin
+        .post("/api/v1/users", json!({ "email": "other@example.com", "username": "ayse.k", "name": "Other" }))
+        .await
+        .assert(StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(r.body["error"]["fields"]["username"].is_string(), "body: {}", r.body);
+    admin
+        .post("/api/v1/users", json!({ "email": "bad@example.com", "username": "a@b", "name": "Bad" }))
+        .await
+        .assert(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn users_set_and_clear_their_username() {
+    let app = TestApp::new().await;
+    let mut admin = app.admin().await;
+    let r = admin.patch("/api/v1/me", json!({ "username": "hoca" })).await.assert(StatusCode::OK);
+    assert_eq!(r.body["username"], "hoca");
+    app.client().login("hoca", ADMIN_PASSWORD).await.assert(StatusCode::OK);
+
+    let r = admin.patch("/api/v1/me", json!({ "username": "" })).await.assert(StatusCode::OK);
+    assert!(r.body["username"].is_null());
+    app.client().login("hoca", ADMIN_PASSWORD).await.assert(StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn email_and_username_share_the_rate_limit() {
+    let app = TestApp::new().await;
+    let mut admin = app.admin().await;
+    admin.patch("/api/v1/me", json!({ "username": "hoca" })).await.assert(StatusCode::OK);
+    let mut c = app.client();
+    for i in 0..10 {
+        let login = if i % 2 == 0 { "hoca" } else { ADMIN_EMAIL };
+        c.login(login, "wrong-password-1").await.assert(StatusCode::UNAUTHORIZED);
+    }
+    c.login("hoca", ADMIN_PASSWORD).await.assert(StatusCode::TOO_MANY_REQUESTS);
+    c.login(ADMIN_EMAIL, ADMIN_PASSWORD).await.assert(StatusCode::TOO_MANY_REQUESTS);
 }

@@ -20,13 +20,13 @@ import { useBreadcrumbs } from '@/lib/breadcrumbs'
 import { errorMessage, handleFormError } from '@/lib/errors'
 import { useTheme } from '@/lib/theme'
 import { cn, formatDateTime, relativeTime, TIMEZONES } from '@/lib/utils'
-import { passwordSchema } from '@/lib/validation'
+import { passwordSchema, usernameSchema } from '@/lib/validation'
 
-const profileSchema = z.object({ name: z.string().trim().min(1, 'Name is required').max(120), bio: z.string().max(1000), timezone: z.string().min(1) })
+const profileSchema = z.object({ name: z.string().trim().min(1, 'Name is required').max(120), username: usernameSchema, bio: z.string().max(1000), timezone: z.string().min(1) })
 
 function ProfileCard() {
   const { user, refresh } = useUser()
-  const form = useForm<z.infer<typeof profileSchema>>({ resolver: zodResolver(profileSchema), defaultValues: { name: user.name, bio: user.bio, timezone: user.timezone } })
+  const form = useForm<z.infer<typeof profileSchema>>({ resolver: zodResolver(profileSchema), defaultValues: { name: user.name, username: user.username ?? '', bio: user.bio, timezone: user.timezone } })
   const onSubmit = form.handleSubmit(async (v) => {
     try {
       await authApi.updateProfile(v)
@@ -54,6 +54,9 @@ function ProfileCard() {
               <Input id="p-email" value={user.email} disabled />
             </Field>
           </div>
+          <Field label="Username" htmlFor="p-username" error={errors.username?.message} hint="Optional. You can sign in with it instead of your email.">
+            <Input id="p-username" autoComplete="username" autoCapitalize="none" spellCheck={false} {...form.register('username')} />
+          </Field>
           <Field label="Timezone" htmlFor="p-tz" hint="Deadlines and times are displayed in this timezone.">
             <NativeSelect id="p-tz" {...form.register('timezone')}>
               {TIMEZONES.map((tz) => (

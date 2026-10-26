@@ -14,6 +14,8 @@ pub enum Role {
 pub struct User {
     pub id: String,
     pub email: String,
+    /// Optional login name; sign-in accepts it instead of the email.
+    pub username: Option<String>,
     pub name: String,
     pub role: Role,
     #[serde(skip_serializing)]
@@ -44,7 +46,9 @@ pub struct UserSummary {
 
 #[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
-    pub email: String,
+    /// Email address or username. `email` is accepted as the field name too.
+    #[serde(alias = "email")]
+    pub login: String,
     pub password: String,
 }
 
@@ -69,6 +73,8 @@ pub struct ResetPasswordRequest {
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateProfileRequest {
     pub name: Option<String>,
+    /// Empty string removes the username.
+    pub username: Option<String>,
     pub bio: Option<String>,
     pub timezone: Option<String>,
 }
@@ -76,6 +82,7 @@ pub struct UpdateProfileRequest {
 #[derive(Deserialize, ToSchema)]
 pub struct CreateUserRequest {
     pub email: String,
+    pub username: Option<String>,
     pub name: String,
     /// Optional initial password. When omitted, a one-time setup link is returned instead.
     pub password: Option<String>,
@@ -94,6 +101,8 @@ pub struct CreateUserResponse {
 pub struct AdminUpdateUserRequest {
     pub name: Option<String>,
     pub email: Option<String>,
+    /// Empty string removes the username.
+    pub username: Option<String>,
     pub is_active: Option<bool>,
     pub timezone: Option<String>,
 }

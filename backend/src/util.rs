@@ -128,6 +128,13 @@ pub fn is_valid_email(v: &str) -> bool {
     v.len() <= 254 && re.is_match(v)
 }
 
+/// Login name: 3-32 characters of a-z, 0-9, ".", "_" and "-", starting with a letter or digit.
+/// Never contains "@", so sign-in can tell it apart from an email address.
+pub fn is_valid_username(v: &str) -> bool {
+    let re = regex::Regex::new(r"^[a-z0-9][a-z0-9._-]{2,31}$").unwrap();
+    re.is_match(v)
+}
+
 pub fn is_valid_timezone(v: &str) -> bool {
     v.parse::<chrono_tz::Tz>().is_ok()
 }
@@ -184,5 +191,11 @@ mod tests {
     fn email_validation() {
         assert!(is_valid_email("student@example.com"));
         assert!(!is_valid_email("not-an-email"));
+        assert!(is_valid_username("enes.buyuk"));
+        assert!(is_valid_username("s_01"));
+        assert!(!is_valid_username("ab"));
+        assert!(!is_valid_username("Enes"));
+        assert!(!is_valid_username("a@b.com"));
+        assert!(!is_valid_username(".hidden"));
     }
 }

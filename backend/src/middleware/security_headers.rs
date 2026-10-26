@@ -9,9 +9,10 @@ use axum::{
 
 use crate::AppState;
 
+// frame-src 'self': PDF and file previews load /api/v1/files/{id} in an iframe.
 const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
 img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; \
-frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; \
+frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; \
 media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
 // Swagger UI ships an inline bootstrap script.

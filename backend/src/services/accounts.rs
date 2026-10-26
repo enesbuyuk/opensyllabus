@@ -7,12 +7,34 @@ use crate::{
     auth::password,
     errors::{AppError, AppResult},
     models::user::{Role, User},
-    util::{fmt_ts, is_valid_email, new_id, now, random_token, sha256_hex},
+    util::{fmt_ts, is_valid_email, is_valid_username, new_id, now, random_token, sha256_hex},
 };
+
+/// Normalizes an optional username: trimmed, lowercased, empty means none.
+pub fn clean_username(v: Option<&str>) -> AppResult<Option<String>> {
+    match v.map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()) {
+        Some(u) if !is_valid_username(&u) => Err(AppError::field(
+            "username",
+            "Use 3-32 characters: lowercase letters, digits, \".\", \"_\" or \"-\", starting with a letter or digit",
+        )),
+        other => Ok(other),
+    }
+}
+
+/// Maps a unique violation on `users` to a field error on the column that clashed.
+pub fn user_conflict(e: sqlx::Error) -> AppError {
+    let username = matches!(&e, sqlx::Error::Database(db) if db.message().contains("username"));
+    match AppError::from(e) {
+        AppError::Conflict(_) if username => AppError::field("username", "This username is already taken"),
+        AppError::Conflict(_) => AppError::field("email", "An account with this email already exists"),
+        other => other,
+    }
+}
 
 pub async fn create_user(
     pool: &SqlitePool,
     email: &str,
+    username: Option<&str>,
     name: &str,
     role: Role,
     password_plain: Option<String>,
@@ -23,6 +45,7 @@ pub async fn create_user(
     if !is_valid_email(&email) {
         return Err(AppError::field("email", "Enter a valid email address"));
     }
+    let username = clean_username(username)?;
     if name.is_empty() || name.chars().count() > 120 {
         return Err(AppError::field("name", "Name is required (max 120 characters)"));
     }
@@ -38,11 +61,12 @@ pub async fn create_user(
     let ts = now();
     let id = new_id();
     sqlx::query(
-        "INSERT INTO users (id, email, name, role, password_hash, timezone, must_change_password, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO users (id, email, username, name, role, password_hash, timezone, must_change_password, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&email)
+    .bind(&username)
     .bind(&name)
     .bind(role)
     .bind(&hash)
@@ -52,10 +76,7 @@ pub async fn create_user(
     .bind(&ts)
     .execute(pool)
     .await
-    .map_err(|e| match AppError::from(e) {
-        AppError::Conflict(_) => AppError::field("email", "An account with this email already exists"),
-        other => other,
-    })?;
+    .map_err(user_conflict)?;
     Ok(sqlx::query_as("SELECT * FROM users WHERE id = ?").bind(&id).fetch_one(pool).await?)
 }
 
@@ -152,8 +173,9 @@ pub async fn bootstrap_admin_from_env(pool: &SqlitePool, timezone: &str) -> anyh
         return Ok(());
     }
     let name = std::env::var("BOOTSTRAP_ADMIN_NAME").unwrap_or_else(|_| "Instructor".into());
-    let user =
-        create_user(pool, &email, &name, Role::Admin, Some(pw), timezone).await.map_err(|e| anyhow::anyhow!("bootstrap admin: {e:?}"))?;
+    let user = create_user(pool, &email, None, &name, Role::Admin, Some(pw), timezone)
+        .await
+        .map_err(|e| anyhow::anyhow!("bootstrap admin: {e:?}"))?;
     adopt_orphan_courses(pool).await.map_err(|e| anyhow::anyhow!("{e}"))?;
     tracing::warn!(email = %user.email, "bootstrap administrator created; remove BOOTSTRAP_ADMIN_PASSWORD from the environment");
     Ok(())

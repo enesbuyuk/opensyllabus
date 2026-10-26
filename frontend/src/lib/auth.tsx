@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { type QueryClient, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { ApiError, setCsrfToken, UNAUTHORIZED_EVENT } from '@/api/client'
 import { authApi } from '@/api/endpoints'
@@ -10,12 +10,22 @@ interface AuthContextValue {
   loading: boolean
   isAdmin: boolean
   timezone: string
-  login: (email: string, password: string) => Promise<User>
+  login: (login: string, password: string) => Promise<User>
   logout: () => Promise<void>
   refresh: () => Promise<unknown>
 }
 
 const AuthContext = React.createContext<AuthContextValue | null>(null)
+
+/**
+ * Drops every cached query except ['me'] and then sets it. qc.clear() would also remove
+ * the ['me'] query that useQuery is observing, so the new user would never reach the UI
+ * and RequireAuth would bounce the freshly signed-in user back to /login.
+ */
+function resetCacheWithUser(qc: QueryClient, user: User | null) {
+  qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' })
+  qc.setQueryData(['me'], user)
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient()
@@ -54,11 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading: me.isLoading,
       isAdmin: user?.role === 'admin',
       timezone: user?.timezone || DEFAULT_TIMEZONE,
-      login: async (email, password) => {
-        const r = await authApi.login(email, password)
+      login: async (login, password) => {
+        const r = await authApi.login(login, password)
         setCsrfToken(r.csrf_token)
-        qc.clear()
-        qc.setQueryData(['me'], r.user)
+        resetCacheWithUser(qc, r.user)
         return r.user
       },
       logout: async () => {
@@ -66,8 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await authApi.logout()
         } finally {
           setCsrfToken(null)
-          qc.clear()
-          qc.setQueryData(['me'], null)
+          resetCacheWithUser(qc, null)
         }
       },
       refresh: () => me.refetch(),

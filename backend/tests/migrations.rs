@@ -62,3 +62,29 @@ async fn initial_course_seed_is_idempotent() {
     let published: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM weeks WHERE status = 'published'").fetch_one(&pool).await.unwrap();
     assert_eq!(published, 0, "seeded weeks start as drafts");
 }
+
+#[tokio::test]
+async fn usernames_are_backfilled_from_unique_email_local_parts() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = Config::for_tests(dir.path());
+    let pool = db::connect(&cfg.database_path).await.unwrap();
+    // Schema as it was before 0002 (same 0001 file, so the checksum matches), with accounts created then.
+    let only_first = dir.path().join("migrations-0001");
+    std::fs::create_dir_all(&only_first).unwrap();
+    std::fs::copy("migrations/0001_initial_schema.sql", only_first.join("0001_initial_schema.sql")).unwrap();
+    sqlx::migrate::Migrator::new(only_first.as_path()).await.unwrap().run(&pool).await.unwrap();
+    for (id, email) in [("1", "Enes@a.com"), ("2", "dup@a.com"), ("3", "dup@b.com"), ("4", "x@a.com"), ("5", "has+plus@a.com")] {
+        sqlx::query(
+            "INSERT INTO users (id, email, name, role, password_hash, created_at, updated_at) VALUES (?, ?, 'U', 'student', 'h', '', '')",
+        )
+        .bind(id)
+        .bind(email)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    db::migrate(&pool).await.unwrap();
+    let rows: Vec<(String, Option<String>)> = sqlx::query_as("SELECT id, username FROM users ORDER BY id").fetch_all(&pool).await.unwrap();
+    let names: Vec<Option<&str>> = rows.iter().map(|(_, u)| u.as_deref()).collect();
+    assert_eq!(names, [Some("enes"), None, None, None, None]);
+}

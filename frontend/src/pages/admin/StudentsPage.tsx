@@ -23,7 +23,7 @@ import { useBreadcrumbs } from '@/lib/breadcrumbs'
 import { errorMessage, handleFormError } from '@/lib/errors'
 import { cn, formatDateTime, relativeTime } from '@/lib/utils'
 import type { StudentListItem } from '@/types/api'
-import { passwordSchema } from '@/lib/validation'
+import { passwordSchema, usernameSchema } from '@/lib/validation'
 
 function CopyLink({ link, expires }: { link: string; expires?: string }) {
   const [copied, setCopied] = React.useState(false)
@@ -59,6 +59,7 @@ function CopyLink({ link, expires }: { link: string; expires?: string }) {
 const createSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(120),
   email: z.string().trim().email('Enter a valid email address'),
+  username: usernameSchema,
   mode: z.enum(['link', 'password']),
   password: z.string(),
   course_ids: z.array(z.string()),
@@ -75,18 +76,18 @@ function CreateStudentDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         if (!r.success) ctx.addIssue({ code: 'custom', path: ['password'], message: r.error.issues[0].message })
       }
     })),
-    defaultValues: { name: '', email: '', mode: 'link', password: '', course_ids: [] },
+    defaultValues: { name: '', email: '', username: '', mode: 'link', password: '', course_ids: [] },
   })
   React.useEffect(() => {
     if (open) {
       setCreated(null)
-      form.reset({ name: '', email: '', mode: 'link', password: '', course_ids: courses.data?.filter((c) => c.status === 'published').map((c) => c.id).slice(0, 1) ?? [] })
+      form.reset({ name: '', email: '', username: '', mode: 'link', password: '', course_ids: courses.data?.filter((c) => c.status === 'published').map((c) => c.id).slice(0, 1) ?? [] })
     }
   }, [open, courses.data, form])
   const mode = form.watch('mode')
   const onSubmit = form.handleSubmit(async (v) => {
     try {
-      const r = await usersApi.create({ name: v.name, email: v.email, password: v.mode === 'password' ? v.password : undefined, course_ids: v.course_ids })
+      const r = await usersApi.create({ name: v.name, email: v.email, username: v.username || undefined, password: v.mode === 'password' ? v.password : undefined, course_ids: v.course_ids })
       qc.invalidateQueries({ queryKey: ['students'] })
       qc.invalidateQueries({ queryKey: ['courses'] })
       setCreated({ name: r.user.name, link: r.setup_link })
@@ -108,7 +109,7 @@ function CreateStudentDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             {created.link && <CopyLink link={created.link} />}
             <DialogFooter>
               <Button variant="outline" onClick={() => {
-                  form.reset({ ...form.getValues(), name: '', email: '', password: '' })
+                  form.reset({ ...form.getValues(), name: '', email: '', username: '', password: '' })
                   setCreated(null)
                 }}>
                 Add another
@@ -130,6 +131,9 @@ function CreateStudentDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 <Input id="s-email" type="email" autoComplete="off" {...form.register('email')} />
               </Field>
             </div>
+            <Field label="Username" htmlFor="s-username" error={errors.username?.message} hint="Optional. The student can sign in with it instead of the email.">
+              <Input id="s-username" autoComplete="off" autoCapitalize="none" spellCheck={false} {...form.register('username')} />
+            </Field>
             <Controller
               control={form.control}
               name="mode"
@@ -184,13 +188,13 @@ function CreateStudentDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   )
 }
 
-const editSchema = z.object({ name: z.string().trim().min(1).max(120), email: z.string().trim().email('Enter a valid email address') })
+const editSchema = z.object({ name: z.string().trim().min(1).max(120), email: z.string().trim().email('Enter a valid email address'), username: usernameSchema })
 
 function EditStudentDialog({ student, onOpenChange }: { student: StudentListItem | null; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient()
   const form = useForm<z.infer<typeof editSchema>>({ resolver: zodResolver(editSchema) })
   React.useEffect(() => {
-    if (student) form.reset({ name: student.name, email: student.email })
+    if (student) form.reset({ name: student.name, email: student.email, username: student.username ?? '' })
   }, [student, form])
   const onSubmit = form.handleSubmit(async (v) => {
     try {
@@ -215,6 +219,9 @@ function EditStudentDialog({ student, onOpenChange }: { student: StudentListItem
           </Field>
           <Field label="Email" htmlFor="e-email" error={errors.email?.message}>
             <Input id="e-email" type="email" {...form.register('email')} />
+          </Field>
+          <Field label="Username" htmlFor="e-username" error={errors.username?.message} hint="Leave empty to remove it.">
+            <Input id="e-username" autoComplete="off" autoCapitalize="none" spellCheck={false} {...form.register('username')} />
           </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -307,7 +314,10 @@ export function StudentsPage() {
                       <Avatar name={s.name} />
                       <div className="min-w-0">
                         <div className="truncate font-medium">{s.name}</div>
-                        <div className="truncate text-xs text-muted-foreground">{s.email}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {s.email}
+                          {s.username && <span> · @{s.username}</span>}
+                        </div>
                       </div>
                     </div>
                   </TableCell>

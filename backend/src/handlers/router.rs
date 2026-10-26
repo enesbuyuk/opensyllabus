@@ -94,6 +94,7 @@ fn api_routes(state: &AppState) -> Router<AppState> {
         .route("/calendar", get(calendar::entries))
         .route("/calendar/events", post(calendar::create))
         .route("/calendar/events/{id}", axum::routing::patch(calendar::update).delete(calendar::delete))
+        .route("/calendar/events/{id}/skip", post(calendar::skip_occurrence))
         // Overview
         .route("/dashboard", get(dashboard::dashboard))
         .route("/analytics", get(analytics::analytics))

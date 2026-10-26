@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Navigate, Route, Routes } from 'react-router'
 import { Markdown } from '@/components/markdown'
 import { AssignmentStateBadge } from '@/components/status'
 import { LabReportForm } from '@/features/assignments/LabReportForm'
 import { SubmissionContent } from '@/features/assignments/SubmissionContent'
-import { AuthProvider } from '@/lib/auth'
+import { AuthProvider, useAuth } from '@/lib/auth'
 import { emptyLabReport } from '@/lib/labels'
 import { LoginPage } from '@/pages/LoginPage'
 
@@ -75,16 +75,52 @@ describe('LoginPage', () => {
   it('validates input before submitting', async () => {
     render(wrap(<AuthProvider><LoginPage /></AuthProvider>))
     await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
-    expect(await screen.findByText('Enter your email address')).toBeInTheDocument()
+    expect(await screen.findByText('Enter your email or username')).toBeInTheDocument()
     expect(screen.getByText('Enter your password')).toBeInTheDocument()
   })
 
   it('shows the server error for invalid credentials', async () => {
     render(wrap(<AuthProvider><LoginPage /></AuthProvider>))
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'invalid_credentials', message: 'Invalid email or password' } }), { status: 401 }))
-    await userEvent.type(await screen.findByLabelText('Email'), 'a@b.co')
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'invalid_credentials', message: 'Invalid email, username or password' } }), { status: 401 }))
+    await userEvent.type(await screen.findByLabelText('Email or username'), 'a@b.co')
     await userEvent.type(screen.getByLabelText('Password'), 'wrong-pass')
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email, username or password')
+  })
+
+  it('lands on the protected page right after signing in', async () => {
+    function Protected() {
+      const { user, loading } = useAuth()
+      if (loading) return null
+      return user ? <p>Welcome {user.name}</p> : <Navigate to="/login" replace />
+    }
+    const user = { id: 'u1', email: 'a@b.co', username: 'ayse', name: 'Ayşe', role: 'student' }
+    // Signed out until the login call; public endpoints (platform settings) answer normally.
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/auth/login')) return new Response(JSON.stringify({ user, csrf_token: 't' }), { status: 200 })
+      if (url.endsWith('/auth/me')) return new Response(JSON.stringify({ error: { code: 'unauthorized', message: 'authentication required' } }), { status: 401 })
+      return new Response('{}', { status: 200 })
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/']}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<Protected />} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await userEvent.type(await screen.findByLabelText('Email or username'), 'ayse')
+    await userEvent.type(screen.getByLabelText('Password'), 'student-pass-1')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    // Signing in navigates twice (navigate() and LoginPage's <Navigate>), which can remount the page: query the live DOM.
+    await waitFor(() => expect(screen.getByText('Welcome Ayşe')).toBeInTheDocument())
+    const [, init] = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/auth/login'))!
+    expect(JSON.parse(String(init?.body))).toEqual({ login: 'ayse', password: 'student-pass-1' })
   })
 })

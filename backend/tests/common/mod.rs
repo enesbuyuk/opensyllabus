@@ -42,7 +42,9 @@ impl TestApp {
         std::fs::create_dir_all(&config.storage_dir).unwrap();
         let pool = db::connect(&config.database_path).await.unwrap();
         db::migrate(&pool).await.unwrap();
-        accounts::create_user(&pool, ADMIN_EMAIL, "Instructor", Role::Admin, Some(ADMIN_PASSWORD.into()), "Europe/Istanbul").await.unwrap();
+        accounts::create_user(&pool, ADMIN_EMAIL, None, "Instructor", Role::Admin, Some(ADMIN_PASSWORD.into()), "Europe/Istanbul")
+            .await
+            .unwrap();
         let state = AppState::new(pool, config).await.unwrap();
         Self { router: build_router(state.clone()), state, _dir: dir }
     }

@@ -4,7 +4,7 @@ import type * as T from '@/types/api'
 
 export const authApi = {
   me: () => api.get<T.MeResponse>('/auth/me'),
-  login: (email: string, password: string) => api.post<T.MeResponse>('/auth/login', { email, password }),
+  login: (login: string, password: string) => api.post<T.MeResponse>('/auth/login', { login, password }),
   logout: () => api.post<void>('/auth/logout'),
   changePassword: (current_password: string, new_password: string) =>
     api.post<void>('/auth/change-password', { current_password, new_password }),
@@ -12,14 +12,14 @@ export const authApi = {
   sessions: () => api.get<T.SessionInfo[]>('/auth/sessions'),
   revokeSession: (id: string) => api.delete(`/auth/sessions/${id}`),
   revokeOthers: () => api.post<void>('/auth/sessions/revoke-others'),
-  updateProfile: (body: { name?: string; bio?: string; timezone?: string }) => api.patch<T.User>('/me', body),
+  updateProfile: (body: { name?: string; username?: string; bio?: string; timezone?: string }) => api.patch<T.User>('/me', body),
 }
 
 export const usersApi = {
   list: (q?: { role?: string; q?: string; course_id?: string }) => api.get<T.StudentListItem[]>('/users', q),
-  create: (body: { email: string; name: string; password?: string; course_ids: string[] }) =>
+  create: (body: { email: string; username?: string; name: string; password?: string; course_ids: string[] }) =>
     api.post<T.CreateUserResponse>('/users', body),
-  update: (id: string, body: Partial<Pick<T.User, 'name' | 'email' | 'is_active' | 'timezone'>>) =>
+  update: (id: string, body: Partial<Pick<T.User, 'name' | 'email' | 'is_active' | 'timezone'>> & { username?: string }) =>
     api.patch<T.User>(`/users/${id}`, body),
   resetLink: (id: string) => api.post<{ link: string; expires_at: string }>(`/users/${id}/reset-link`),
   revokeSessions: (id: string) => api.post<{ count: number }>(`/users/${id}/revoke-sessions`),
@@ -144,13 +144,26 @@ export const notificationsApi = {
   readAll: () => api.post<void>('/notifications/read-all'),
 }
 
-export type EventInput = { course_id?: string; title?: string; description?: string; kind?: string; starts_at?: string; ends_at?: string; location?: string }
+export type EventInput = {
+  course_id?: string
+  title?: string
+  description?: string
+  kind?: string
+  starts_at?: string
+  ends_at?: string
+  location?: string
+  /** `{ freq: 'none' }` stops repeating; omitted leaves the rule unchanged. */
+  recurrence?: Omit<T.Recurrence, 'freq'> & { freq: T.RecurrenceFreq | 'none' }
+  timezone?: string
+}
 
 export const calendarApi = {
   entries: (q: { from: string; to: string; course_id?: string }) => api.get<T.CalendarEntry[]>('/calendar', q),
   create: (body: EventInput) => api.post<T.CalendarEvent>('/calendar/events', body),
   update: (id: string, body: EventInput) => api.patch<T.CalendarEvent>(`/calendar/events/${id}`, body),
   remove: (id: string) => api.delete(`/calendar/events/${id}`),
+  /** Removes one occurrence (YYYY-MM-DD) from a repeating event. */
+  skip: (id: string, date: string) => api.post<T.CalendarEvent>(`/calendar/events/${id}/skip`, { date }),
 }
 
 export const miscApi = {

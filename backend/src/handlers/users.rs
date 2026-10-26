@@ -78,8 +78,16 @@ pub async fn create(
     ApiJson(req): ApiJson<CreateUserRequest>,
 ) -> AppResult<Response> {
     let tz = state.settings.read().map(|s| s.default_timezone.clone()).unwrap_or_else(|_| "UTC".into());
-    let user =
-        accounts::create_user(&state.pool, &req.email, &req.name, Role::Student, req.password.filter(|p| !p.is_empty()), &tz).await?;
+    let user = accounts::create_user(
+        &state.pool,
+        &req.email,
+        req.username.as_deref(),
+        &req.name,
+        Role::Student,
+        req.password.filter(|p| !p.is_empty()),
+        &tz,
+    )
+    .await?;
     let ts = now();
     for cid in &req.course_ids {
         sqlx::query("INSERT OR IGNORE INTO course_enrollments (id, course_id, user_id, enrolled_at) VALUES (?, ?, ?, ?)")
@@ -125,6 +133,10 @@ pub async fn update(
     let user = load_user(&state, &id).await?;
     let name = req.name.map(|n| n.trim().to_string()).unwrap_or(user.name.clone());
     let email = req.email.map(|e| e.trim().to_lowercase()).unwrap_or(user.email.clone());
+    let username = match req.username {
+        Some(u) => accounts::clean_username(Some(&u))?,
+        None => user.username.clone(),
+    };
     let tz = req.timezone.unwrap_or(user.timezone.clone());
     let is_active = req.is_active.unwrap_or(user.is_active);
     let mut v = Validator::new();
@@ -133,19 +145,17 @@ pub async fn update(
         .check(is_valid_timezone(&tz), "timezone", "Unknown timezone")
         .check(!(user.id == admin.id && !is_active), "is_active", "You cannot deactivate your own account")
         .finish()?;
-    sqlx::query("UPDATE users SET name = ?, email = ?, timezone = ?, is_active = ?, updated_at = ? WHERE id = ?")
+    sqlx::query("UPDATE users SET name = ?, email = ?, username = ?, timezone = ?, is_active = ?, updated_at = ? WHERE id = ?")
         .bind(&name)
         .bind(&email)
+        .bind(&username)
         .bind(&tz)
         .bind(is_active)
         .bind(now())
         .bind(&id)
         .execute(&state.pool)
         .await
-        .map_err(|e| match AppError::from(e) {
-            AppError::Conflict(_) => AppError::field("email", "An account with this email already exists"),
-            other => other,
-        })?;
+        .map_err(accounts::user_conflict)?;
     if user.is_active && !is_active {
         session::revoke_all_for_user(&state.pool, &id, None).await?;
     }
@@ -198,19 +208,25 @@ pub async fn update_profile(
 ) -> AppResult<Response> {
     let name = req.name.map(|n| n.trim().to_string()).unwrap_or(user.name.clone());
     let bio = req.bio.unwrap_or(user.bio.clone());
+    let username = match req.username {
+        Some(u) => accounts::clean_username(Some(&u))?,
+        None => user.username.clone(),
+    };
     let tz = req.timezone.unwrap_or(user.timezone.clone());
     Validator::new()
         .len(&name, "name", 1, 120)
         .len(&bio, "bio", 0, 1000)
         .check(is_valid_timezone(&tz), "timezone", "Unknown timezone")
         .finish()?;
-    sqlx::query("UPDATE users SET name = ?, bio = ?, timezone = ?, updated_at = ? WHERE id = ?")
+    sqlx::query("UPDATE users SET name = ?, username = ?, bio = ?, timezone = ?, updated_at = ? WHERE id = ?")
         .bind(&name)
+        .bind(&username)
         .bind(&bio)
         .bind(&tz)
         .bind(now())
         .bind(&user.id)
         .execute(&state.pool)
-        .await?;
+        .await
+        .map_err(accounts::user_conflict)?;
     Ok(json(load_user(&state, &user.id).await?))
 }

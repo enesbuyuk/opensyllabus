@@ -1,4 +1,5 @@
-import type { AssignmentKind, CalendarEntry, ResourceKind, StudentAssignmentState, SubmissionStatus } from '@/types/api'
+import type { AssignmentKind, CalendarEntry, Recurrence, RecurrenceFreq, ResourceKind, StudentAssignmentState, SubmissionStatus } from '@/types/api'
+import { formatPlainDate } from './utils'
 
 export const ASSIGNMENT_KIND_LABELS: Record<AssignmentKind, string> = {
   written: 'Written assignment',
@@ -73,4 +74,25 @@ export const LAB_REPORT_SECTIONS: { key: keyof import('@/types/api').LabReport; 
 
 export function emptyLabReport() {
   return Object.fromEntries(LAB_REPORT_SECTIONS.map((s) => [s.key, ''])) as unknown as import('@/types/api').LabReport
+}
+
+export const WEEKDAYS = [
+  { n: 1, short: 'Mon', letter: 'M' },
+  { n: 2, short: 'Tue', letter: 'T' },
+  { n: 3, short: 'Wed', letter: 'W' },
+  { n: 4, short: 'Thu', letter: 'T' },
+  { n: 5, short: 'Fri', letter: 'F' },
+  { n: 6, short: 'Sat', letter: 'S' },
+  { n: 7, short: 'Sun', letter: 'S' },
+]
+export const FREQ_UNIT: Record<RecurrenceFreq, [string, string]> = { daily: ['day', 'days'], weekly: ['week', 'weeks'], monthly: ['month', 'months'] }
+
+/** "Every 2 weeks on Mon, Wed, 4 times" */
+export function describeRecurrence(r: Recurrence) {
+  const [one, many] = FREQ_UNIT[r.freq]
+  let text = r.interval === 1 ? `Every ${one}` : `Every ${r.interval} ${many}`
+  if (r.freq === 'weekly' && r.weekdays.length) text += ` on ${r.weekdays.map((d) => WEEKDAYS[d - 1].short).join(', ')}`
+  if (r.until) text += `, until ${formatPlainDate(r.until)}`
+  if (r.count) text += `, ${r.count} ${r.count === 1 ? 'time' : 'times'}`
+  return text
 }

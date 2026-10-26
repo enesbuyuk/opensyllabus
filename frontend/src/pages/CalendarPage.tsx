@@ -1,20 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, addMonths, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from 'date-fns'
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, Repeat, Trash2 } from 'lucide-react'
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { calendarApi } from '@/api/endpoints'
+import { calendarApi, type EventInput } from '@/api/endpoints'
 import { CourseSelect } from '@/components/course-select'
 import { Field } from '@/components/form'
 import { EmptyState, ErrorState, PageHeader } from '@/components/page'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input, NativeSelect, Textarea } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/misc'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -22,7 +22,7 @@ import { useCourses } from '@/hooks/queries'
 import { useAuth } from '@/lib/auth'
 import { useBreadcrumbs } from '@/lib/breadcrumbs'
 import { handleFormError } from '@/lib/errors'
-import { CALENDAR_KIND_LABELS } from '@/lib/labels'
+import { CALENDAR_KIND_LABELS, describeRecurrence, FREQ_UNIT, WEEKDAYS } from '@/lib/labels'
 import { cn, formatPlainDate, formatTime, isoToWallTime, todayIn, wallTimeToIso } from '@/lib/utils'
 import type { CalendarEntry } from '@/types/api'
 
@@ -41,6 +41,12 @@ function dayKey(e: CalendarEntry, tz: string) {
   return e.all_day ? e.starts_at.slice(0, 10) : isoToWallTime(e.starts_at, tz).slice(0, 10)
 }
 
+/** ISO weekday (1 = Monday) of a "YYYY-MM-DDTHH:mm" wall time. */
+function isoWeekday(wall: string) {
+  const [y, m, d] = wall.slice(0, 10).split('-').map(Number)
+  return ((new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7) + 1
+}
+
 const eventSchema = z
   .object({
     course_id: z.string().min(1, 'Select a course'),
@@ -50,9 +56,21 @@ const eventSchema = z
     ends_at: z.string(),
     location: z.string().max(200),
     description: z.string().max(5000),
+    repeat: z.enum(['none', 'daily', 'weekly', 'monthly']),
+    interval: z.number({ message: 'Enter a number' }).int().min(1, 'At least 1').max(99, 'At most 99'),
+    weekdays: z.array(z.number()),
+    end_mode: z.enum(['never', 'until', 'count']),
+    until: z.string(),
+    count: z.number({ message: 'Enter a number' }).int().min(1, 'At least 1').max(500, 'At most 500'),
   })
   .refine((v) => !v.ends_at || v.ends_at >= v.starts_at, { message: 'End must be after start', path: ['ends_at'] })
+  .refine((v) => v.repeat === 'none' || v.end_mode !== 'until' || (v.until && v.until >= v.starts_at.slice(0, 10)), {
+    message: 'Pick a date on or after the start',
+    path: ['until'],
+  })
 type EventForm = z.infer<typeof eventSchema>
+
+const NO_REPEAT = { repeat: 'none', interval: 1, weekdays: [], end_mode: 'never', until: '', count: 10 } as const
 
 function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean; onOpenChange: (o: boolean) => void; entry: CalendarEntry | null; defaultDate?: string }) {
   const { timezone } = useAuth()
@@ -60,30 +78,87 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
   const qc = useQueryClient()
   const [confirm, setConfirm] = React.useState(false)
   const form = useForm<EventForm>({ resolver: zodResolver(eventSchema) })
+  const series = entry?.series ?? null
+  // A repeating event keeps the timezone it was created in; show its times there.
+  const tz = series?.timezone ?? timezone
 
   React.useEffect(() => {
     if (!open) return
+    const rule = series?.recurrence
     form.reset(
       entry
         ? {
             course_id: entry.course_id,
             title: entry.title,
             kind: entry.kind as EventForm['kind'],
-            starts_at: isoToWallTime(entry.starts_at, timezone),
-            ends_at: isoToWallTime(entry.ends_at, timezone),
+            // For a series, edit the rule from its first occurrence.
+            starts_at: isoToWallTime(series?.starts_at ?? entry.starts_at, tz),
+            ends_at: isoToWallTime(series ? series.ends_at : entry.ends_at, tz),
             location: entry.location,
             description: entry.description,
+            ...(rule
+              ? {
+                  repeat: rule.freq,
+                  interval: rule.interval,
+                  weekdays: rule.weekdays,
+                  end_mode: rule.until ? 'until' : rule.count ? 'count' : 'never',
+                  until: rule.until ?? '',
+                  count: rule.count ?? 10,
+                }
+              : { ...NO_REPEAT, weekdays: [] }),
           }
-        : { course_id: courses.data?.[0]?.id ?? '', title: '', kind: 'session', starts_at: `${defaultDate ?? todayIn(timezone)}T10:00`, ends_at: '', location: '', description: '' },
+        : {
+            course_id: courses.data?.[0]?.id ?? '',
+            title: '',
+            kind: 'session',
+            starts_at: `${defaultDate ?? todayIn(timezone)}T10:00`,
+            ends_at: '',
+            location: '',
+            description: '',
+            ...NO_REPEAT,
+            weekdays: [],
+          },
     )
-  }, [open, entry, defaultDate, courses.data, timezone, form])
+  }, [open, entry, series, defaultDate, courses.data, timezone, tz, form])
+
+  const repeat = form.watch('repeat')
+  const endMode = form.watch('end_mode')
+  const weekdays = form.watch('weekdays')
+  const interval = form.watch('interval')
+  const startsAt = form.watch('starts_at')
+  // Weekly with no day picked: start from the start date's weekday.
+  React.useEffect(() => {
+    if (repeat === 'weekly' && weekdays?.length === 0 && startsAt) form.setValue('weekdays', [isoWeekday(startsAt)])
+  }, [repeat, weekdays, startsAt, form])
 
   const done = () => {
     qc.invalidateQueries({ queryKey: ['calendar'] })
     onOpenChange(false)
   }
   const onSubmit = form.handleSubmit(async (v) => {
-    const body = { ...v, starts_at: wallTimeToIso(v.starts_at, timezone), ends_at: v.ends_at ? wallTimeToIso(v.ends_at, timezone) : '' }
+    const recurrence: EventInput['recurrence'] =
+      v.repeat === 'none'
+        ? series
+          ? { freq: 'none', interval: 1, weekdays: [], until: null, count: null }
+          : undefined
+        : {
+            freq: v.repeat,
+            interval: v.interval,
+            weekdays: v.repeat === 'weekly' ? [...v.weekdays].sort() : [],
+            until: v.end_mode === 'until' ? v.until : null,
+            count: v.end_mode === 'count' ? v.count : null,
+          }
+    const body: EventInput = {
+      course_id: v.course_id,
+      title: v.title,
+      kind: v.kind,
+      location: v.location,
+      description: v.description,
+      starts_at: wallTimeToIso(v.starts_at, tz),
+      ends_at: v.ends_at ? wallTimeToIso(v.ends_at, tz) : '',
+      recurrence,
+      timezone: tz,
+    }
     try {
       if (entry?.event_id) await calendarApi.update(entry.event_id, body)
       else await calendarApi.create(body)
@@ -94,20 +169,29 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
     }
   })
   const del = useMutation({
-    mutationFn: () => calendarApi.remove(entry!.event_id!),
-    onSuccess: () => {
-      toast.success('Event deleted')
+    mutationFn: async (scope: 'occurrence' | 'series') => {
+      if (scope === 'occurrence') await calendarApi.skip(entry!.event_id!, series!.occurrence_date)
+      else await calendarApi.remove(entry!.event_id!)
+    },
+    onSuccess: (_, scope) => {
+      toast.success(scope === 'occurrence' ? 'Occurrence removed' : 'Event deleted')
       setConfirm(false)
       done()
     },
   })
   const { errors, isSubmitting } = form.formState
+  const unit = repeat !== 'none' ? FREQ_UNIT[repeat][interval === 1 ? 0 : 1] : ''
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{entry ? 'Edit event' : 'New event'}</DialogTitle>
+          {series && (
+            <DialogDescription className="flex items-center gap-1.5">
+              <Repeat className="size-3.5" /> Repeating event. Changes apply to every occurrence.
+            </DialogDescription>
+          )}
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -133,13 +217,88 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
             <Input id="ev-title" {...form.register('title')} />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Starts" htmlFor="ev-start" error={errors.starts_at?.message} hint={timezone} required>
+            <Field label={series ? 'First occurrence starts' : 'Starts'} htmlFor="ev-start" error={errors.starts_at?.message} hint={tz} required>
               <Input id="ev-start" type="datetime-local" {...form.register('starts_at')} />
             </Field>
             <Field label="Ends" htmlFor="ev-end" error={errors.ends_at?.message}>
               <Input id="ev-end" type="datetime-local" {...form.register('ends_at')} />
             </Field>
           </div>
+
+          <fieldset className="space-y-3 rounded-lg border p-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Repeat" htmlFor="ev-repeat">
+                <NativeSelect id="ev-repeat" {...form.register('repeat')}>
+                  <option value="none">Does not repeat</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly (same day of the month)</option>
+                </NativeSelect>
+              </Field>
+              {repeat !== 'none' && (
+                <Field label="Every" htmlFor="ev-interval" error={errors.interval?.message}>
+                  <div className="flex items-center gap-2">
+                    <Input id="ev-interval" type="number" min={1} max={99} className="w-20" {...form.register('interval', { valueAsNumber: true })} />
+                    <span className="text-sm text-muted-foreground">{unit}</span>
+                  </div>
+                </Field>
+              )}
+            </div>
+            {repeat === 'weekly' && (
+              <div>
+                <div className="mb-1.5 text-[13px] font-medium" id="ev-days-label">
+                  On
+                </div>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="ev-days-label">
+                  {WEEKDAYS.map((d) => {
+                    const on = weekdays?.includes(d.n)
+                    return (
+                      <button
+                        key={d.n}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={d.short}
+                        title={d.short}
+                        onClick={() => {
+                          const next = on ? weekdays.filter((x) => x !== d.n) : [...weekdays, d.n]
+                          if (next.length) form.setValue('weekdays', next, { shouldDirty: true })
+                        }}
+                        className={cn(
+                          'flex size-8 items-center justify-center rounded-full border text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                          on ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
+                        )}
+                      >
+                        {d.letter}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            {repeat !== 'none' && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Ends" htmlFor="ev-endmode">
+                  <NativeSelect id="ev-endmode" {...form.register('end_mode')}>
+                    <option value="never">Never</option>
+                    <option value="until">On a date</option>
+                    <option value="count">After a number of times</option>
+                  </NativeSelect>
+                </Field>
+                {endMode === 'until' && (
+                  <Field label="Last date" htmlFor="ev-until" error={errors.until?.message}>
+                    <Input id="ev-until" type="date" {...form.register('until')} />
+                  </Field>
+                )}
+                {endMode === 'count' && (
+                  <Field label="Occurrences" htmlFor="ev-count" error={errors.count?.message}>
+                    <Input id="ev-count" type="number" min={1} max={500} {...form.register('count', { valueAsNumber: true })} />
+                  </Field>
+                )}
+              </div>
+            )}
+            {errors.root?.message && <p className="text-xs text-destructive">{errors.root.message}</p>}
+          </fieldset>
+
           <Field label="Location" htmlFor="ev-loc">
             <Input id="ev-loc" placeholder="e.g. Electronics Lab 2" {...form.register('location')} />
           </Field>
@@ -164,7 +323,31 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
             </div>
           </DialogFooter>
         </form>
-        <ConfirmDialog open={confirm} onOpenChange={setConfirm} title="Delete this event?" destructive confirmLabel="Delete" loading={del.isPending} onConfirm={() => del.mutate()} />
+        {series ? (
+          <Dialog open={confirm} onOpenChange={setConfirm}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Delete repeating event</DialogTitle>
+                <DialogDescription>
+                  Remove only the occurrence on {formatPlainDate(series.occurrence_date, { weekday: 'short' })}, or every occurrence of &ldquo;{entry?.title}&rdquo;?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirm(false)}>
+                  Cancel
+                </Button>
+                <Button variant="outline" loading={del.isPending && del.variables === 'occurrence'} disabled={del.isPending} onClick={() => del.mutate('occurrence')}>
+                  This occurrence
+                </Button>
+                <Button variant="destructive" loading={del.isPending && del.variables === 'series'} disabled={del.isPending} onClick={() => del.mutate('series')}>
+                  All occurrences
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <ConfirmDialog open={confirm} onOpenChange={setConfirm} title="Delete this event?" destructive confirmLabel="Delete" loading={del.isPending} onConfirm={() => del.mutate('series')} />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -177,6 +360,7 @@ function EntryChip({ e, onEdit }: { e: CalendarEntry; onEdit?: (e: CalendarEntry
       <span className={cn('size-1.5 shrink-0 rounded-full', KIND_STYLE[e.kind].dot)} />
       {!e.all_day && <span className="shrink-0 text-muted-foreground tabular-nums">{formatTime(e.starts_at, timezone)}</span>}
       <span className="truncate">{e.title}</span>
+      {e.series && <Repeat className="size-2.5 shrink-0 text-muted-foreground" aria-label="Repeats" />}
     </>
   )
   const cls = 'flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] leading-4 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none'
@@ -333,6 +517,7 @@ export function CalendarPage() {
                         )}
                         <div className="truncate text-xs text-muted-foreground">
                           {e.course_title}
+                          {e.series && ` · ${describeRecurrence(e.series.recurrence)}`}
                           {e.location && ` · ${e.location}`}
                           {e.description && ` · ${e.description}`}
                         </div>

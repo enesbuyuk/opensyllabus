@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use axum::extract::multipart::Field;
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
+use unicode_normalization::UnicodeNormalization;
 
 use crate::{
     errors::{AppError, AppResult},
@@ -81,6 +82,8 @@ pub fn is_text_type(content_type: &str) -> bool {
 /// Strips paths, control characters and unusual symbols from a client-supplied filename.
 pub fn sanitize_filename(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or("");
+    // macOS sends decomposed names ("s" + combining cedilla); compose them so "ş" survives.
+    let base: String = base.nfc().collect();
     let mut out = String::with_capacity(base.len());
     for c in base.chars() {
         if c.is_alphanumeric() || matches!(c, '.' | '-' | '_' | ' ' | '(' | ')') {
@@ -258,6 +261,9 @@ mod tests {
         assert_eq!(sanitize_filename("../../etc/passwd"), "passwd");
         assert_eq!(sanitize_filename("C:\\Users\\x\\report.pdf"), "report.pdf");
         assert_eq!(sanitize_filename("a<b>c.txt"), "a_b_c.txt");
+        // Decomposed (NFD) Turkish letters, as macOS uploads them.
+        assert_eq!(sanitize_filename("Is\u{327}ıkla Gelis\u{327}im Kılavuzu.pdf"), "Işıkla Gelişim Kılavuzu.pdf");
+        assert_eq!(sanitize_filename("O\u{308}lc\u{327}u\u{308}m.csv"), "Ölçüm.csv");
         assert_eq!(sanitize_filename(".hidden"), "hidden");
         assert_eq!(sanitize_filename(""), "file");
         let long = format!("{}.csv", "x".repeat(300));
