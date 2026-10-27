@@ -102,7 +102,15 @@ export function LessonEditorPage() {
   })
   const status = useMutation({
     mutationFn: async (s: 'draft' | 'published') => {
-      if (form.formState.isDirty) await curriculumApi.updateLesson(id, form.getValues())
+      if (form.formState.isDirty) {
+        // Run the schema so numeric inputs are sent as numbers, not raw strings.
+        const parsed = schema.safeParse(form.getValues())
+        if (!parsed.success) {
+          await form.trigger()
+          throw new Error('Fix the highlighted fields before publishing')
+        }
+        await curriculumApi.updateLesson(id, parsed.data)
+      }
       return curriculumApi.updateLesson(id, { status: s })
     },
     onSuccess: (_, s) => {
