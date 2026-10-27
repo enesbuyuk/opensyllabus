@@ -27,6 +27,8 @@ pub struct Assignment {
     pub max_upload_mb: i64,
     pub allow_resubmission: bool,
     pub status: String,
+    /// Students submit in groups; only the group leader can submit.
+    pub is_group: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -114,6 +116,7 @@ pub struct AssignmentInput {
     pub allowed_file_types: Option<Vec<String>>,
     pub max_upload_mb: Option<i64>,
     pub allow_resubmission: Option<bool>,
+    pub is_group: Option<bool>,
     pub status: Option<String>,
     pub rubric: Option<Vec<RubricCriterion>>,
 }

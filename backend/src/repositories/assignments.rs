@@ -41,6 +41,7 @@ struct Row {
     max_upload_mb: i64,
     allow_resubmission: bool,
     status: String,
+    is_group: bool,
     created_at: String,
     updated_at: String,
     course_title: String,
@@ -61,8 +62,8 @@ pub async fn list(pool: &SqlitePool, user: &User, filter: &AssignmentFilter, now
     if user.is_admin() {
         qb.push(
             "NULL AS sub_status, NULL AS sub_is_late, NULL AS sub_submitted_at, NULL AS released_score,
-             (SELECT COUNT(*) FROM submissions s WHERE s.assignment_id = a.id AND s.status <> 'draft') AS submission_count,
-             (SELECT COUNT(*) FROM submissions s WHERE s.assignment_id = a.id AND s.status IN ('submitted', 'under_review')) AS pending_review_count
+             (SELECT COUNT(*) FROM submissions s WHERE s.assignment_id = a.id AND s.mirror_of IS NULL AND s.status <> 'draft') AS submission_count,
+             (SELECT COUNT(*) FROM submissions s WHERE s.assignment_id = a.id AND s.mirror_of IS NULL AND s.status IN ('submitted', 'under_review')) AS pending_review_count
              FROM assignments a JOIN courses c ON c.id = a.course_id
              LEFT JOIN weeks w ON w.id = a.week_id LEFT JOIN lessons l ON l.id = a.lesson_id WHERE 1 = 1",
         );
@@ -135,6 +136,7 @@ fn into_item(r: Row, admin: bool) -> AssignmentListItem {
             max_upload_mb: r.max_upload_mb,
             allow_resubmission: r.allow_resubmission,
             status: r.status,
+            is_group: r.is_group,
             created_at: r.created_at,
             updated_at: r.updated_at,
         },

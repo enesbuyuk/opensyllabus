@@ -222,6 +222,8 @@ export interface Assignment {
   max_upload_mb: number
   allow_resubmission: boolean
   status: AssignmentStatus
+  /** Students submit in groups; only the group leader can submit. */
+  is_group: boolean
   created_at: string
   updated_at: string
 }
@@ -288,6 +290,27 @@ export interface Submission {
   is_late: boolean
   created_at: string
   updated_at: string
+  /** Set on a group member's copy of the group leader's submission. */
+  mirror_of: string | null
+}
+
+export interface GroupMember {
+  student_id: string
+  name: string
+  email: string
+  /** Instructor only: this student's grade instead of the group grade. */
+  score_override: number | null
+}
+
+export interface GroupInfo {
+  id: string
+  assignment_id: string
+  name: string
+  leader_id: string
+  members: GroupMember[]
+  /** Instructor only: the shared grade before individual overrides. */
+  score: number | null
+  submission_id: string | null
 }
 
 export interface SubmissionRevision {
@@ -336,6 +359,7 @@ export interface SubmissionDetail extends Submission {
   grade: Grade | null
   feedback: Feedback[]
   can_edit: boolean
+  group: GroupInfo | null
 }
 
 export interface SubmissionListItem {
@@ -357,6 +381,7 @@ export interface SubmissionListItem {
   score: number | null
   released_at: string | null
   updated_at: string
+  group_name: string | null
 }
 
 export type ResourceKind = 'pdf' | 'image' | 'markdown' | 'code' | 'link' | 'video' | 'datasheet' | 'lab'

@@ -22,11 +22,17 @@ pub async fn list(pool: &SqlitePool, f: &SubmissionFilter) -> AppResult<Vec<Subm
     let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new(
         "SELECT s.id, s.assignment_id, a.title AS assignment_title, a.course_id, c.title AS course_title, a.week_id,
                 w.week_number, s.student_id, u.name AS student_name, s.status, s.attempt, s.submitted_at, s.is_late,
-                a.due_at, a.max_grade, g.score, g.released_at, s.updated_at
+                a.due_at, a.max_grade, g.score, g.released_at, s.updated_at, ag.name AS group_name
          FROM submissions s JOIN assignments a ON a.id = s.assignment_id JOIN courses c ON c.id = a.course_id
          JOIN users u ON u.id = s.student_id LEFT JOIN weeks w ON w.id = a.week_id
-         LEFT JOIN grades g ON g.submission_id = s.id WHERE 1 = 1",
+         LEFT JOIN grades g ON g.submission_id = s.id
+         LEFT JOIN assignment_group_members gm ON gm.assignment_id = s.assignment_id AND gm.student_id = s.student_id
+         LEFT JOIN assignment_groups ag ON ag.id = gm.group_id WHERE 1 = 1",
     );
+    // Group members' copies only show when looking at one student; otherwise the leader's row stands for the group.
+    if f.student_id.is_none() {
+        qb.push(" AND s.mirror_of IS NULL");
+    }
     if !f.include_drafts {
         qb.push(" AND s.status <> 'draft'");
     }

@@ -43,6 +43,7 @@ const schema = z
     allowed_file_types: z.array(z.string()),
     max_upload_mb: z.coerce.number<number>().int().min(1).max(100),
     allow_resubmission: z.boolean(),
+    is_group: z.boolean(),
     rubric: z.array(z.object({ id: z.string(), title: z.string().trim().min(1, 'Required'), description: z.string(), max_points: z.coerce.number<number>().positive('> 0') })),
   })
   .refine((v) => !v.publish_at || !v.due_at || v.publish_at < v.due_at, { message: 'Due date must be after the publication date', path: ['due_at'] })
@@ -107,6 +108,7 @@ export function AssignmentEditorPage() {
       allowed_file_types: a?.allowed_file_types ?? [],
       max_upload_mb: a?.max_upload_mb ?? 20,
       allow_resubmission: a?.allow_resubmission ?? false,
+      is_group: a?.is_group ?? false,
       rubric: a?.rubric.map((c) => ({ id: c.id, title: c.title, description: c.description, max_points: c.max_points })) ?? [],
     })
   }, [id, existing.data, courses.data, params, timezone, form])
@@ -313,6 +315,16 @@ export function AssignmentEditorPage() {
                   <Label className="font-normal">
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
                     Allow resubmission before the deadline
+                  </Label>
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="is_group"
+                render={({ field }) => (
+                  <Label className="font-normal">
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    Group assignment (the group leader submits, everyone shares the grade)
                   </Label>
                 )}
               />

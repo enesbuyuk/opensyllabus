@@ -25,6 +25,7 @@ use crate::handlers::*;
         submissions::my_submission, submissions::save_draft, submissions::upload_attachment, submissions::delete_attachment,
         submissions::submit, submissions::list, submissions::list_for_assignment, submissions::get,
         submissions::start_review, submissions::review,
+        groups::list, groups::create, groups::update, groups::delete, groups::set_override,
         files::download, files::upload,
         resources::list, resources::get, resources::create, resources::update, resources::delete,
         announcements::list, announcements::create, announcements::update, announcements::delete,

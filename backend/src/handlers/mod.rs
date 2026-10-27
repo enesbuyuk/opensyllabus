@@ -9,6 +9,7 @@ pub mod courses;
 pub mod curriculum;
 pub mod dashboard;
 pub mod files;
+pub mod groups;
 pub mod health;
 pub mod notifications;
 pub mod progress;

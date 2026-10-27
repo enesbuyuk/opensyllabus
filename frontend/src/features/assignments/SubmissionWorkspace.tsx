@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, History, Save, Send } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Crown, History, Save, Send, Users } from 'lucide-react'
 import * as React from 'react'
 import { toast } from 'sonner'
 import { assignmentsApi } from '@/api/endpoints'
@@ -8,6 +8,7 @@ import { Field } from '@/components/form'
 import { MarkdownEditor } from '@/components/markdown-editor'
 import { ErrorState } from '@/components/page'
 import { SubmissionStatusBadge } from '@/components/status'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -17,7 +18,7 @@ import { useAuth } from '@/lib/auth'
 import { errorMessage } from '@/lib/errors'
 import { emptyLabReport, LAB_REPORT_SECTIONS } from '@/lib/labels'
 import { formatDateTime, isPast } from '@/lib/utils'
-import type { AssignmentDetail, LabReport, SubmissionDetail } from '@/types/api'
+import type { AssignmentDetail, GroupInfo, LabReport, SubmissionDetail } from '@/types/api'
 import { FeedbackPanel } from './FeedbackPanel'
 import { LabReportForm } from './LabReportForm'
 import { SubmissionContent } from './SubmissionContent'
@@ -55,6 +56,44 @@ function missingRequirement(a: AssignmentDetail, d: DraftState, files: number): 
       return missing ? `The lab report section “${missing.label}” is required.` : null
     }
   }
+}
+
+function GroupBanner({ group, studentId }: { group: GroupInfo | null; studentId: string }) {
+  if (!group) {
+    return (
+      <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-[13px]">
+        <Users className="mt-0.5 size-4 shrink-0 text-warning" />
+        This is a group assignment and you have not been assigned to a group yet. Your instructor will add you to one.
+      </div>
+    )
+  }
+  const leader = group.members.find((m) => m.student_id === group.leader_id)
+  const isLeader = group.leader_id === studentId
+  return (
+    <div className="space-y-2 rounded-xl border bg-card px-4 py-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Users className="size-4 text-muted-foreground" /> {group.name}
+      </div>
+      <p className="text-[13px] text-muted-foreground">
+        {isLeader
+          ? 'You are the group leader: what you submit here counts for the whole group, and everyone receives the same grade.'
+          : `${leader?.name ?? 'Your group leader'} submits for the group. The submission and grade appear here for you too.`}
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {group.members.map((m) =>
+          m.student_id === group.leader_id ? (
+            <Badge key={m.student_id} variant="info">
+              <Crown /> {m.name}
+            </Badge>
+          ) : (
+            <Badge key={m.student_id} variant="outline">
+              {m.name}
+            </Badge>
+          ),
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function SubmissionWorkspace({ assignment }: { assignment: AssignmentDetail }) {
@@ -164,9 +203,11 @@ export function SubmissionWorkspace({ assignment }: { assignment: AssignmentDeta
   const blocker = missingRequirement(assignment, draft, d.attachments.length)
   const willBeLate = !!assignment.due_at && isPast(assignment.due_at)
   const latest = d.revisions[0]
+  const groupMember = assignment.is_group && d.group?.leader_id !== d.student.id
 
   return (
     <div className="space-y-6">
+      {assignment.is_group && <GroupBanner group={d.group} studentId={d.student.id} />}
       <FeedbackPanel detail={d} />
 
       {editable ? (
@@ -235,7 +276,11 @@ export function SubmissionWorkspace({ assignment }: { assignment: AssignmentDeta
             <div className="space-y-1">
               <CardTitle>Your submission</CardTitle>
               <CardDescription>
-                {d.submitted_at ? `Attempt ${d.attempt} · submitted ${formatDateTime(d.submitted_at, timezone)}` : 'This assignment is no longer accepting submissions.'}
+                {d.submitted_at
+                  ? `Attempt ${d.attempt} · submitted ${formatDateTime(d.submitted_at, timezone)}`
+                  : groupMember
+                    ? 'Only the group leader can submit this assignment.'
+                    : 'This assignment is no longer accepting submissions.'}
               </CardDescription>
             </div>
             <SubmissionStatusBadge status={d.status} late={d.is_late} />
@@ -244,7 +289,7 @@ export function SubmissionWorkspace({ assignment }: { assignment: AssignmentDeta
             {latest ? (
               <SubmissionContent body={latest.body_md} labReport={latest.lab_report} repositoryUrl={latest.repository_url} attachments={latest.attachments} />
             ) : (
-              <p className="text-sm text-muted-foreground">You did not submit this assignment.</p>
+              <p className="text-sm text-muted-foreground">{groupMember ? 'Your group has not submitted yet.' : 'You did not submit this assignment.'}</p>
             )}
           </CardContent>
         </Card>

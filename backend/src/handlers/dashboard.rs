@@ -232,7 +232,9 @@ async fn admin_dashboard(state: &AppState, admin_user: &User) -> AppResult<Admin
         sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role = 'student' AND is_active = 1").fetch_one(pool).await?;
     let active_courses: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM courses WHERE status = 'published'").fetch_one(pool).await?;
     let pending_submissions: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM submissions WHERE status IN ('submitted', 'under_review')").fetch_one(pool).await?;
+        sqlx::query_scalar("SELECT COUNT(*) FROM submissions WHERE mirror_of IS NULL AND status IN ('submitted', 'under_review')")
+            .fetch_one(pool)
+            .await?;
     let overdue_assignments: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM assignments a JOIN courses c ON c.id = a.course_id
          JOIN course_enrollments e ON e.course_id = a.course_id JOIN users u ON u.id = e.user_id AND u.role = 'student' AND u.is_active = 1
@@ -270,7 +272,7 @@ async fn admin_dashboard(state: &AppState, admin_user: &User) -> AppResult<Admin
     let recent_activity: Vec<ActivityItem> = sqlx::query_as(
         "SELECT * FROM (
             SELECT 'submission' AS kind, u.name AS student_name, a.title AS title, '/admin/reviews?submission=' || s.id AS link, s.submitted_at AS at
-            FROM submissions s JOIN users u ON u.id = s.student_id JOIN assignments a ON a.id = s.assignment_id WHERE s.submitted_at IS NOT NULL
+            FROM submissions s JOIN users u ON u.id = s.student_id JOIN assignments a ON a.id = s.assignment_id WHERE s.submitted_at IS NOT NULL AND s.mirror_of IS NULL
             UNION ALL
             SELECT 'lesson_completed', u.name, l.title, '/lessons/' || l.id, lp.completed_at
             FROM lesson_progress lp JOIN users u ON u.id = lp.user_id JOIN lessons l ON l.id = lp.lesson_id

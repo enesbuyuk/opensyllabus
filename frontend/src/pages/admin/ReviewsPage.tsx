@@ -11,6 +11,7 @@ import { NativeSelect } from '@/components/ui/input'
 import { Avatar, Skeleton } from '@/components/ui/misc'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FeedbackPanel } from '@/features/assignments/FeedbackPanel'
+import { GroupGradePanel } from '@/features/assignments/GroupGradePanel'
 import { ReviewPanel } from '@/features/assignments/ReviewPanel'
 import { SubmissionContent } from '@/features/assignments/SubmissionContent'
 import { useCourses } from '@/hooks/queries'
@@ -21,7 +22,7 @@ import { cn, formatDateTime, formatScore, relativeTime } from '@/lib/utils'
 
 const FILTERS = ['course', 'week', 'assignment', 'student', 'status'] as const
 
-function SubmissionView({ id, onBack }: { id: string; onBack: () => void }) {
+function SubmissionView({ id, onBack, onSelect }: { id: string; onBack: () => void; onSelect: (id: string) => void }) {
   const { timezone } = useAuth()
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['submission', id], queryFn: () => submissionsApi.get(id) })
@@ -50,7 +51,15 @@ function SubmissionView({ id, onBack }: { id: string; onBack: () => void }) {
           </Button>
           <Avatar name={d.student.name} className="size-10" />
           <div className="min-w-0">
-            <div className="font-semibold">{d.student.name}</div>
+            <div className="font-semibold">
+              {d.group ? (
+                <>
+                  {d.group.name} <span className="font-normal text-muted-foreground">({d.group.members.map((m) => m.name).join(', ')})</span>
+                </>
+              ) : (
+                d.student.name
+              )}
+            </div>
             <Link to={`/assignments/${d.assignment.id}`} className="flex items-center gap-1 truncate text-[13px] text-muted-foreground hover:text-foreground">
               {d.assignment.title} <ExternalLink className="size-3" />
             </Link>
@@ -110,7 +119,19 @@ function SubmissionView({ id, onBack }: { id: string; onBack: () => void }) {
               </span>
             )}
           </div>
-          <ReviewPanel detail={d} />
+          {d.mirror_of ? (
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>This is {d.student.name}'s copy of the group submission. Grade the group from the leader's submission.</p>
+              <Button variant="outline" size="sm" onClick={() => onSelect(d.mirror_of!)}>
+                Open group submission
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <ReviewPanel detail={d} />
+              <GroupGradePanel detail={d} />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -225,7 +246,7 @@ export function ReviewsPage() {
                     <Avatar name={s.student_name} className="size-7 text-[10px]" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium">{s.student_name}</span>
+                        <span className="truncate text-sm font-medium">{s.group_name ? `${s.group_name} (${s.student_name})` : s.student_name}</span>
                         <span className="shrink-0 text-[11px] text-muted-foreground">{relativeTime(s.submitted_at)}</span>
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
@@ -246,7 +267,7 @@ export function ReviewsPage() {
         </div>
         <div className={cn(!selected && 'hidden lg:block')}>
           {selected ? (
-            <SubmissionView key={selected} id={selected} onBack={() => select(null)} />
+            <SubmissionView key={selected} id={selected} onBack={() => select(null)} onSelect={select} />
           ) : (
             <EmptyState icon={ClipboardCheck} title="Select a submission" description="Choose a submission from the list to read it and enter feedback." className="h-full min-h-80" />
           )}

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/misc'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { GroupsCard } from '@/features/assignments/GroupsCard'
 import { SubmissionWorkspace } from '@/features/assignments/SubmissionWorkspace'
 import { useAuth } from '@/lib/auth'
 import { useBreadcrumbs } from '@/lib/breadcrumbs'
@@ -106,7 +107,7 @@ function InstructorSubmissions({ a }: { a: AssignmentDetail }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-5">Student</TableHead>
+                <TableHead className="pl-5">{a.is_group ? 'Group' : 'Student'}</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead className="pr-5 text-right">Grade</TableHead>
@@ -117,8 +118,9 @@ function InstructorSubmissions({ a }: { a: AssignmentDetail }) {
                 <TableRow key={s.id}>
                   <TableCell className="pl-5">
                     <Link to={`/admin/reviews?submission=${s.id}`} className="flex items-center gap-2 font-medium hover:underline">
-                      <Avatar name={s.student_name} className="size-6 text-[10px]" />
-                      {s.student_name}
+                      <Avatar name={s.group_name ?? s.student_name} className="size-6 text-[10px]" />
+                      {s.group_name ?? s.student_name}
+                      {s.group_name && <span className="font-normal text-muted-foreground">({s.student_name})</span>}
                     </Link>
                   </TableCell>
                   <TableCell>
@@ -164,6 +166,7 @@ export function AssignmentPage() {
           <div className="flex flex-wrap items-center gap-2">
             {isAdmin ? <PublishBadge status={a.status} /> : a.state && <AssignmentStateBadge state={a.state} />}
             {a.allow_resubmission && <Badge variant="outline">Resubmission allowed</Badge>}
+            {a.is_group && <Badge variant="outline">Group assignment</Badge>}
             {!isAdmin && a.score != null && <Badge variant="success">Grade {formatScore(a.score, a.max_grade)}</Badge>}
           </div>
           {a.description && <p className="max-w-3xl text-sm text-muted-foreground">{a.description}</p>}
@@ -181,7 +184,10 @@ export function AssignmentPage() {
         <div className="xl:col-span-2">
           <Instructions a={a} />
         </div>
-        <div className="xl:col-span-3">{isAdmin ? <InstructorSubmissions a={a} /> : <SubmissionWorkspace assignment={a} />}</div>
+        <div className="space-y-6 xl:col-span-3">
+          {isAdmin && a.is_group && <GroupsCard assignment={a} />}
+          {isAdmin ? <InstructorSubmissions a={a} /> : <SubmissionWorkspace assignment={a} />}
+        </div>
       </div>
     </div>
   )

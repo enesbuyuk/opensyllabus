@@ -3,6 +3,7 @@
 pub mod assignment;
 pub mod course;
 pub mod curriculum;
+pub mod group;
 pub mod misc;
 pub mod submission;
 pub mod user;

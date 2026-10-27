@@ -16,7 +16,7 @@ use crate::{
         submission::{FileMeta, ReviewRequest, SaveDraftRequest, Submission, SubmissionDetail, SubmissionListItem},
     },
     repositories::submissions::{self as repo, SubmissionFilter},
-    services::{audit, storage, submissions as svc},
+    services::{audit, groups, storage, submissions as svc},
     util::{new_id, now},
     AppState,
 };
@@ -101,6 +101,7 @@ pub async fn upload_attachment(
             .execute(&state.pool)
             .await?;
     }
+    groups::sync_for_leader(&state.pool, &a, &user.id).await?;
     Ok(created(meta))
 }
 
@@ -128,6 +129,7 @@ pub async fn delete_attachment(
             .execute(&state.pool)
             .await?;
     }
+    groups::sync_for_leader(&state.pool, &a, &user.id).await?;
     storage::delete_if_orphaned(&state, &file_id).await?;
     Ok(no_content())
 }
@@ -207,7 +209,19 @@ pub async fn get(State(state): State<AppState>, user: AuthUser, Path(id): Path<S
 #[utoipa::path(post, path = "/api/v1/submissions/{id}/start-review", tag = "submissions", params(("id" = String, Path)), responses((status = 204)))]
 pub async fn start_review(State(state): State<AppState>, admin: AdminUser, Path(id): Path<String>) -> AppResult<Response> {
     let _ = &admin;
-    svc::mark_under_review(&state.pool, &id).await?;
+    let sub: Submission = sqlx::query_as("SELECT * FROM submissions WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or(AppError::NotFound("Submission"))?;
+    // A group member's copy is reviewed through the leader's submission.
+    let canonical = sub.mirror_of.as_deref().unwrap_or(&sub.id);
+    svc::mark_under_review(&state.pool, canonical).await?;
+    let (a, leader): (Assignment, String) = (
+        sqlx::query_as("SELECT * FROM assignments WHERE id = ?").bind(&sub.assignment_id).fetch_one(&state.pool).await?,
+        sqlx::query_scalar("SELECT student_id FROM submissions WHERE id = ?").bind(canonical).fetch_one(&state.pool).await?,
+    );
+    groups::sync_for_leader(&state.pool, &a, &leader).await?;
     Ok(no_content())
 }
 
@@ -224,6 +238,9 @@ pub async fn review(
         .fetch_optional(&state.pool)
         .await?
         .ok_or(AppError::NotFound("Submission"))?;
+    if sub.mirror_of.is_some() {
+        return Err(AppError::Conflict("This is a copy of a group submission; review the group leader's submission instead".into()));
+    }
     let a: Assignment = sqlx::query_as("SELECT * FROM assignments WHERE id = ?").bind(&sub.assignment_id).fetch_one(&state.pool).await?;
     let action = req.action.clone();
     svc::review(&state.pool, &sub, &a, &admin, req).await?;

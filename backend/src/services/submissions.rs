@@ -22,7 +22,10 @@ use crate::{
         Json,
     },
     repositories,
-    services::notifications::{self, NewNotification},
+    services::{
+        groups,
+        notifications::{self, NewNotification},
+    },
     util::{is_http_url, new_id, now, to_json},
 };
 
@@ -75,6 +78,7 @@ async fn get_or_create(pool: &SqlitePool, a: &Assignment, student_id: &str) -> A
 
 /// Ensures the student may edit, creating the draft row on first use.
 pub async fn editable_submission(pool: &SqlitePool, a: &Assignment, student: &User) -> AppResult<Submission> {
+    groups::ensure_can_submit(pool, a, &student.id).await?;
     let existing = find(pool, &a.id, &student.id).await?;
     if !can_edit(a, existing.as_ref(), &now()) {
         return Err(AppError::Conflict(match existing.as_ref().map(|s| s.status.as_str()) {
@@ -126,6 +130,7 @@ pub async fn save_draft(pool: &SqlitePool, a: &Assignment, student: &User, req: 
         .bind(&sub.id)
         .execute(pool)
         .await?;
+    groups::sync_for_leader(pool, a, &student.id).await?;
     Ok(sqlx::query_as("SELECT * FROM submissions WHERE id = ?").bind(&sub.id).fetch_one(pool).await?)
 }
 
@@ -170,6 +175,7 @@ fn validate_for_submit(a: &Assignment, s: &Submission, attachments: usize) -> Ap
 }
 
 pub async fn submit(pool: &SqlitePool, a: &Assignment, student: &User) -> AppResult<Submission> {
+    groups::ensure_can_submit(pool, a, &student.id).await?;
     let sub = find(pool, &a.id, &student.id).await?.ok_or_else(|| AppError::bad_request("Save a draft before submitting"))?;
     let ts = now();
     if !can_edit(a, Some(&sub), &ts) || sub.status == "submitted" {
@@ -208,14 +214,20 @@ pub async fn submit(pool: &SqlitePool, a: &Assignment, student: &User) -> AppRes
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
+    groups::sync_for_leader(pool, a, &student.id).await?;
 
+    let group = groups::info_for(pool, a, &student.id, true).await?;
+    let who = match &group {
+        Some(g) => format!("{} ({})", g.name, student.name),
+        None => student.name.clone(),
+    };
     let admins: Vec<String> = sqlx::query_scalar("SELECT id FROM users WHERE role = 'admin' AND is_active = 1").fetch_all(pool).await?;
     notifications::notify_users(
         pool,
         &admins,
         &NewNotification {
             kind: "submission_received",
-            title: format!("{} submitted \"{}\"", student.name, a.title),
+            title: format!("{who} submitted \"{}\"", a.title),
             body: if late { "Submitted after the deadline.".into() } else { format!("Attempt {attempt}.") },
             link: Some(format!("/admin/reviews?submission={}", sub.id)),
             dedupe: Some(format!("submission:{}:{attempt}", sub.id)),
@@ -319,6 +331,14 @@ pub async fn review(pool: &SqlitePool, sub: &Submission, a: &Assignment, reviewe
         .execute(&mut *tx)
         .await?;
     }
+    if let (true, Some(_)) = (a.is_group, &scored) {
+        sqlx::query("UPDATE assignment_groups SET score = (SELECT score FROM grades WHERE submission_id = ?) WHERE assignment_id = ? AND leader_id = ?")
+            .bind(&sub.id)
+            .bind(&a.id)
+            .bind(&sub.student_id)
+            .execute(&mut *tx)
+            .await?;
+    }
     if action == "request_revision" {
         // A revision request makes any earlier grade provisional again.
         sqlx::query("UPDATE grades SET released_at = NULL WHERE submission_id = ?").bind(&sub.id).execute(&mut *tx).await?;
@@ -352,13 +372,19 @@ pub async fn review(pool: &SqlitePool, sub: &Submission, a: &Assignment, reviewe
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
+    groups::sync_for_leader(pool, a, &sub.student_id).await?;
 
+    // Everyone in the group hears about the shared review.
+    let recipients = match groups::group_of(pool, &a.id, &sub.student_id).await? {
+        Some((gid, _)) if a.is_group => groups::member_ids(pool, &gid).await?,
+        _ => vec![sub.student_id.clone()],
+    };
     let link = Some(format!("/assignments/{}", a.id));
     match action {
         "return" => {
             notifications::notify_users(
                 pool,
-                std::slice::from_ref(&sub.student_id),
+                &recipients,
                 &NewNotification {
                     kind: "assignment_graded",
                     title: format!("Graded: {}", a.title),
@@ -376,7 +402,7 @@ pub async fn review(pool: &SqlitePool, sub: &Submission, a: &Assignment, reviewe
         "request_revision" => {
             notifications::notify_users(
                 pool,
-                std::slice::from_ref(&sub.student_id),
+                &recipients,
                 &NewNotification {
                     kind: "revision_requested",
                     title: format!("Revision requested: {}", a.title),
@@ -418,12 +444,19 @@ pub async fn detail(pool: &SqlitePool, sub: Submission, viewer: &User) -> AppRes
     .bind(&sub.id)
     .fetch_all(pool)
     .await?;
+    let group = groups::info_for(pool, &a, &sub.student_id, viewer.is_admin()).await?;
+    let canonical = group.as_ref().is_some_and(|g| g.leader_id == sub.student_id);
+    // The review form edits the group grade, not the leader's possibly overridden one.
+    let grade = match (grade, group.as_ref().and_then(|g| g.score)) {
+        (Some(g), Some(score)) if canonical && viewer.is_admin() => Some(Grade { score, ..g }),
+        (g, _) => g,
+    };
     let (grade, feedback) = if viewer.is_admin() {
         (grade, feedback)
     } else {
         (grade.filter(|g| g.released_at.is_some()), feedback.into_iter().filter(|f| f.released_at.is_some()).collect())
     };
-    let can_edit = !viewer.is_admin() && can_edit(&a, Some(&sub), &now());
+    let can_edit = !viewer.is_admin() && can_edit(&a, Some(&sub), &now()) && (!a.is_group || canonical);
     let rubric = repositories::assignments::rubric(pool, &a.id).await?;
     Ok(SubmissionDetail {
         submission: sub,
@@ -437,6 +470,7 @@ pub async fn detail(pool: &SqlitePool, sub: Submission, viewer: &User) -> AppRes
         grade,
         feedback,
         can_edit,
+        group,
     })
 }
 
@@ -456,5 +490,6 @@ pub fn empty_for(a: &Assignment, student: &User) -> Submission {
         is_late: false,
         created_at: ts.clone(),
         updated_at: ts,
+        mirror_of: None,
     }
 }

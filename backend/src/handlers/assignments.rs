@@ -13,7 +13,7 @@ use crate::{
     middleware::ClientIp,
     models::assignment::{Assignment, AssignmentDetail, AssignmentInput, AssignmentListItem, RubricCriterion, KINDS, LATE_POLICIES},
     repositories::assignments::{self as repo, AssignmentFilter},
-    services::{audit, background, storage, submissions},
+    services::{audit, background, groups, storage, submissions},
     util::{new_id, now, parse_opt_ts, to_json, Validator},
     AppState,
 };
@@ -41,7 +41,11 @@ pub async fn get(State(state): State<AppState>, user: AuthUser, Path(id): Path<S
     let item = repo::list(&state.pool, &user, &f, &ts, &state.today()).await?.into_iter().next().ok_or(AppError::NotFound("Assignment"))?;
     let rubric = repo::rubric(&state.pool, &a.id).await?;
     let sub = if user.is_admin() { None } else { submissions::find(&state.pool, &a.id, &user.id).await? };
-    let accepts = if user.is_admin() { a.status == "published" } else { submissions::can_edit(&a, sub.as_ref(), &ts) };
+    let accepts = if user.is_admin() {
+        a.status == "published"
+    } else {
+        submissions::can_edit(&a, sub.as_ref(), &ts) && groups::ensure_can_submit(&state.pool, &a, &user.id).await.is_ok()
+    };
     Ok(json(AssignmentDetail { is_past_due: submissions::is_past_due(&a, &ts), accepts_submissions: accepts, item, rubric }))
 }
 
@@ -62,6 +66,7 @@ struct Resolved {
     allowed_file_types: Vec<String>,
     max_upload_mb: i64,
     allow_resubmission: bool,
+    is_group: bool,
     status: String,
 }
 
@@ -113,6 +118,7 @@ async fn resolve(state: &AppState, req: AssignmentInput, base: Option<&Assignmen
             .collect(),
         max_upload_mb: pick(req.max_upload_mb, b.map(|b| b.max_upload_mb), 20),
         allow_resubmission: pick(req.allow_resubmission, b.map(|b| b.allow_resubmission), false),
+        is_group: pick(req.is_group, b.map(|b| b.is_group), false),
         status: pick(req.status, b.map(|b| b.status.clone()), "draft".into()),
     };
     let supported = storage::supported_extensions();
@@ -238,8 +244,8 @@ pub async fn create(
     let mut tx = state.pool.begin().await?;
     sqlx::query(
         "INSERT INTO assignments (id, course_id, week_id, lesson_id, title, description, instructions_md, reference_md, kind, max_grade, due_at, publish_at,
-            late_policy, late_penalty_percent, allowed_file_types, max_upload_mb, allow_resubmission, status, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            late_policy, late_penalty_percent, allowed_file_types, max_upload_mb, allow_resubmission, is_group, status, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&r.course_id)
@@ -258,6 +264,7 @@ pub async fn create(
     .bind(to_json(&r.allowed_file_types))
     .bind(r.max_upload_mb)
     .bind(r.allow_resubmission)
+    .bind(r.is_group)
     .bind(&r.status)
     .bind(&admin.id)
     .bind(&ts)
@@ -303,11 +310,18 @@ pub async fn update(
             return Err(AppError::field("max_grade", "Maximum grade must match the rubric total"));
         }
     }
+    if a.is_group && !r.is_group {
+        let n: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM assignment_groups WHERE assignment_id = ?").bind(&a.id).fetch_one(&state.pool).await?;
+        if n > 0 {
+            return Err(AppError::field("is_group", "Delete this assignment's groups before turning off group submission"));
+        }
+    }
     let mut tx = state.pool.begin().await?;
     sqlx::query(
         "UPDATE assignments SET week_id = ?, lesson_id = ?, title = ?, description = ?, instructions_md = ?, reference_md = ?, kind = ?,
             max_grade = ?, due_at = ?, publish_at = ?, late_policy = ?, late_penalty_percent = ?, allowed_file_types = ?, max_upload_mb = ?,
-            allow_resubmission = ?, status = ?, updated_at = ? WHERE id = ?",
+            allow_resubmission = ?, is_group = ?, status = ?, updated_at = ? WHERE id = ?",
     )
     .bind(&r.week_id)
     .bind(&r.lesson_id)
@@ -324,6 +338,7 @@ pub async fn update(
     .bind(to_json(&r.allowed_file_types))
     .bind(r.max_upload_mb)
     .bind(r.allow_resubmission)
+    .bind(r.is_group)
     .bind(&r.status)
     .bind(now())
     .bind(&a.id)

@@ -102,7 +102,15 @@ export const assignmentsApi = {
   deleteAttachment: (id: string, fileId: string) => api.delete(`/assignments/${id}/submission/attachments/${fileId}`),
   submit: (id: string) => api.post<T.Submission>(`/assignments/${id}/submissions`),
   submissions: (id: string) => api.get<T.SubmissionListItem[]>(`/assignments/${id}/submissions`),
+  groups: (id: string) => api.get<T.GroupInfo[]>(`/assignments/${id}/groups`),
+  createGroup: (id: string, body: GroupInput) => api.post<{ id: string }>(`/assignments/${id}/groups`, body),
+  updateGroup: (id: string, groupId: string, body: GroupInput) => api.put<T.GroupInfo>(`/assignments/${id}/groups/${groupId}`, body),
+  deleteGroup: (id: string, groupId: string) => api.delete(`/assignments/${id}/groups/${groupId}`),
+  setScoreOverride: (id: string, groupId: string, studentId: string, score: number | null) =>
+    api.put<T.GroupInfo>(`/assignments/${id}/groups/${groupId}/members/${studentId}/override`, { score }),
 }
+
+export type GroupInput = { name: string; leader_id: string; member_ids: string[] }
 
 export const submissionsApi = {
   list: (q?: { course_id?: string; week_id?: string; assignment_id?: string; student_id?: string; status?: string }) =>

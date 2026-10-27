@@ -57,6 +57,8 @@ pub struct Submission {
     pub is_late: bool,
     pub created_at: String,
     pub updated_at: String,
+    /// Set on a group member's copy of the group leader's submission.
+    pub mirror_of: Option<String>,
 }
 
 /// Attachment metadata exposed to clients. The private storage key is never included.
@@ -125,6 +127,8 @@ pub struct SubmissionDetail {
     pub grade: Option<Grade>,
     pub feedback: Vec<Feedback>,
     pub can_edit: bool,
+    /// The student's group on a group assignment.
+    pub group: Option<super::group::GroupInfo>,
 }
 
 #[derive(Serialize, sqlx::FromRow, ToSchema)]
@@ -147,6 +151,7 @@ pub struct SubmissionListItem {
     pub score: Option<f64>,
     pub released_at: Option<String>,
     pub updated_at: String,
+    pub group_name: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema)]
