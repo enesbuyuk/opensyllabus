@@ -49,7 +49,7 @@ pub fn can_edit(a: &Assignment, sub: Option<&Submission>, now: &str) -> bool {
     match status {
         // A revision request explicitly reopens the submission regardless of the deadline.
         "revision_requested" => true,
-        "draft" => !(is_past_due(a, now) && a.late_policy == "reject"),
+        "not_started" | "draft" => !(is_past_due(a, now) && a.late_policy == "reject"),
         "submitted" => a.allow_resubmission && !is_past_due(a, now),
         _ => false,
     }
