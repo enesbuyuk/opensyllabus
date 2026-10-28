@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FolderOpen, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { ChevronRight, FolderOpen, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import * as React from 'react'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
@@ -61,6 +61,64 @@ export function ResourcesPage() {
 
   if (!courses.isLoading && !course) return <EmptyState icon={FolderOpen} title="No courses available" description="Resources appear once you are enrolled in a course." />
   const items = list.data ?? []
+  const weeks = curriculum.data?.weeks ?? []
+  // Resources grouped per week as an accordion; course-wide resources come first.
+  const groups = Object.values(
+    items.reduce<Record<string, { key: string; label: string; order: number; items: Resource[] }>>((acc, r) => {
+      const key = r.week_id ?? 'general'
+      const week = weeks.find((w) => w.id === r.week_id)
+      acc[key] ??= { key, label: r.week_number ? `Week ${r.week_number}${week?.title ? `: ${week.title}` : ''}` : 'General', order: r.week_number ?? 0, items: [] }
+      acc[key].items.push(r)
+      return acc
+    }, {}),
+  ).sort((a, b) => a.order - b.order)
+  const filtered = !!(search || kind || weekId || moduleId)
+  // Open the current week by default, or the latest week that has resources.
+  const current = weeks.find((w) => w.state === 'current')?.id
+  const openKey = groups.some((g) => g.key === current) ? current : groups.at(-1)?.key
+
+  const renderItem = (r: Resource) => {
+    const Icon = RESOURCE_ICONS[r.kind]
+    return (
+      <li key={r.id} id={`resource-${r.id}`} className={cn('flex items-center gap-3 px-4 py-3', highlight === r.id && 'bg-primary/5')}>
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
+          <Icon className="size-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-medium">{r.title}</span>
+            <Badge variant="outline">{RESOURCE_KIND_LABELS[r.kind]}</Badge>
+            {r.visibility === 'instructor' && <Badge variant="warning">Instructor only</Badge>}
+          </div>
+          <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+            {r.module_title && <span>{r.module_title}</span>}
+            {r.lesson_title && <span>{r.lesson_title}</span>}
+            {r.file_size != null && <span>{formatBytes(r.file_size)}</span>}
+            <span>Added {formatDate(r.created_at, timezone)}</span>
+          </div>
+          {r.description && <p className="mt-1 line-clamp-1 text-[13px] text-muted-foreground">{r.description}</p>}
+        </div>
+        <ResourceActions r={r} onPreview={setPreview} onRead={setReading} />
+        {isAdmin && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label={`Manage ${r.title}`}>
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setDialog({ open: true, resource: r })}>
+                <Pencil /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem destructive onSelect={() => setDeleting(r)}>
+                <Trash2 /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </li>
+    )
+  }
 
   return (
     <>
@@ -125,51 +183,22 @@ export function ResourcesPage() {
       ) : items.length === 0 ? (
         <EmptyState icon={FolderOpen} title="No resources found" description={search || kind || weekId || moduleId ? 'Try clearing the filters.' : 'Resources added by your instructor will appear here.'} />
       ) : (
-        <ul className="divide-y overflow-hidden rounded-xl border bg-card">
-          {items.map((r) => {
-            const Icon = RESOURCE_ICONS[r.kind]
-            return (
-              <li key={r.id} id={`resource-${r.id}`} className={cn('flex items-center gap-3 px-4 py-3', highlight === r.id && 'bg-primary/5')}>
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
-                  <Icon className="size-4 text-muted-foreground" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium">{r.title}</span>
-                    <Badge variant="outline">{RESOURCE_KIND_LABELS[r.kind]}</Badge>
-                    {r.visibility === 'instructor' && <Badge variant="warning">Instructor only</Badge>}
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                    {r.module_title && <span>{r.module_title}</span>}
-                    {r.week_number && <span>Week {r.week_number}</span>}
-                    {r.lesson_title && <span>{r.lesson_title}</span>}
-                    {r.file_size != null && <span>{formatBytes(r.file_size)}</span>}
-                    <span>Added {formatDate(r.created_at, timezone)}</span>
-                  </div>
-                  {r.description && <p className="mt-1 line-clamp-1 text-[13px] text-muted-foreground">{r.description}</p>}
-                </div>
-                <ResourceActions r={r} onPreview={setPreview} onRead={setReading} />
-                {isAdmin && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm" aria-label={`Manage ${r.title}`}>
-                        <MoreHorizontal />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => setDialog({ open: true, resource: r })}>
-                        <Pencil /> Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem destructive onSelect={() => setDeleting(r)}>
-                        <Trash2 /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </li>
-            )
-          })}
-        </ul>
+        <div className="space-y-3">
+          {groups.map((g) => (
+            <details
+              key={`${g.key}-${filtered}`}
+              open={filtered || g.key === openKey || g.items.some((r) => r.id === highlight)}
+              className="group overflow-hidden rounded-xl border bg-card"
+            >
+              <summary className="flex cursor-pointer items-center gap-3 px-4 py-3 select-none hover:bg-accent/40 [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{g.label}</span>
+                <Badge variant="outline">{g.items.length}</Badge>
+              </summary>
+              <ul className="divide-y border-t">{g.items.map(renderItem)}</ul>
+            </details>
+          ))}
+        </div>
       )}
       <ResourceViewers preview={preview} setPreview={setPreview} reading={reading} setReading={setReading} />
       {isAdmin && (
