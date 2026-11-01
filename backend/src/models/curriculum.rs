@@ -51,6 +51,8 @@ pub struct Lesson {
     pub published_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// Live class link for this lesson's session; overrides the schedule slot's link.
+    pub meeting_url: Option<String>,
 }
 
 /// Student-facing week state on the curriculum timeline.
@@ -129,6 +131,11 @@ pub struct LessonDetail {
     pub assignments: Vec<super::assignment::AssignmentListItem>,
     pub previous_lesson_id: Option<String>,
     pub next_lesson_id: Option<String>,
+    /// Effective live class link: the lesson's own link, else its schedule slot's link.
+    pub class_meeting_url: Option<String>,
+    /// Scheduled class time of this lesson, when the course has a start date and schedule.
+    pub class_starts_at: Option<String>,
+    pub class_ends_at: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -197,6 +204,7 @@ pub struct CreateLessonRequest {
     #[serde(default)]
     pub lab_md: String,
     pub video_url: Option<String>,
+    pub meeting_url: Option<String>,
     #[serde(default)]
     pub objectives: Vec<String>,
     #[serde(default)]
@@ -212,6 +220,8 @@ pub struct UpdateLessonRequest {
     pub lab_md: Option<String>,
     /// Empty string removes the video.
     pub video_url: Option<String>,
+    /// Empty string removes the lesson's own class link (the schedule's link applies again).
+    pub meeting_url: Option<String>,
     pub objectives: Option<Vec<String>>,
     pub estimated_minutes: Option<i64>,
     pub status: Option<String>,

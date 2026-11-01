@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, addMonths, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from 'date-fns'
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Repeat, Trash2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, Repeat, Trash2, Video } from 'lucide-react'
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
@@ -11,6 +11,7 @@ import { calendarApi, type EventInput } from '@/api/endpoints'
 import { CourseSelect } from '@/components/course-select'
 import { Field } from '@/components/form'
 import { EmptyState, ErrorState, PageHeader } from '@/components/page'
+import { classPhase, isSafeMeetingUrl, JoinClassButton } from '@/components/live-class'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -364,6 +365,7 @@ function EntryChip({ e, onEdit }: { e: CalendarEntry; onEdit?: (e: CalendarEntry
       {!e.all_day && <span className="shrink-0 text-muted-foreground tabular-nums">{formatTime(e.starts_at, timezone)}</span>}
       <span className="truncate">{e.title}</span>
       {e.series && <Repeat className="size-2.5 shrink-0 text-muted-foreground" aria-label="Repeats" />}
+      {isSafeMeetingUrl(e.meeting_url) && <Video className="size-2.5 shrink-0 text-primary" aria-label="Online class" />}
     </>
   )
   const cls = 'flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] leading-4 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none'
@@ -525,6 +527,7 @@ export function CalendarPage() {
                           {e.description && ` · ${e.description}`}
                         </div>
                       </div>
+                      {isSafeMeetingUrl(e.meeting_url) && classPhase(e.starts_at, e.ends_at) !== 'ended' && <JoinClassButton url={e.meeting_url} size="sm" />}
                       <Badge variant={KIND_STYLE[e.kind].badge}>{CALENDAR_KIND_LABELS[e.kind]}</Badge>
                       {isAdmin && e.event_id && (
                         <Button variant="ghost" size="sm" onClick={() => setEditing(e)}>

@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { curriculumApi } from '@/api/endpoints'
 import { AssignmentRows } from '@/components/assignment-list'
+import { LiveClassCard } from '@/components/live-class'
 import { Markdown } from '@/components/markdown'
 import { ErrorState, PageSkeleton, Section } from '@/components/page'
 import { ResourceList } from '@/components/resource-list'
@@ -78,6 +79,8 @@ export function LessonPage() {
           )}
         </div>
       </header>
+
+      <LiveClassCard url={l.class_meeting_url} startsAt={l.class_starts_at} endsAt={l.class_ends_at} timezone={timezone} />
 
       {!l.prerequisites_met ? (
         <Card className="border-warning/30">

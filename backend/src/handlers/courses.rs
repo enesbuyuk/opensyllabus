@@ -16,7 +16,7 @@ use crate::{
         user::User,
     },
     services::{audit, curriculum, progress, schedule, storage},
-    util::{clean_list, is_valid_timezone, new_id, now, parse_opt_date, slugify, to_json, Validator},
+    util::{clean_list, is_http_url, is_valid_timezone, new_id, now, parse_opt_date, slugify, to_json, Validator},
     AppState,
 };
 
@@ -355,7 +355,7 @@ pub async fn load_schedule(state: &AppState, course_id: &str) -> AppResult<Cours
     let rows: Vec<(String,)> =
         sqlx::query_as("SELECT timezone FROM course_schedule WHERE course_id = ? LIMIT 1").bind(course_id).fetch_all(&state.pool).await?;
     let slots: Vec<ScheduleSlot> = sqlx::query_as(
-        "SELECT day_number, weekday, start_time, end_time, location FROM course_schedule WHERE course_id = ? ORDER BY day_number",
+        "SELECT day_number, weekday, start_time, end_time, location, meeting_url FROM course_schedule WHERE course_id = ? ORDER BY day_number",
     )
     .bind(course_id)
     .fetch_all(&state.pool)
@@ -397,6 +397,9 @@ pub async fn update_schedule(
         .check(start.is_some(), &field, "Start time must be HH:MM")
         .check(end.is_none_or(|e| e.is_some_and(|e| start.is_none_or(|s| e > s))), &field, "End time must be HH:MM and after the start")
         .len(&s.location, &field, 0, 200);
+        if let Some(u) = s.meeting_url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
+            v.check(is_http_url(u) && u.starts_with("https://"), &field, "Class link must be an https link");
+        }
     }
     v.finish()?;
 
@@ -404,7 +407,7 @@ pub async fn update_schedule(
     sqlx::query("DELETE FROM course_schedule WHERE course_id = ?").bind(&id).execute(&mut *tx).await?;
     for s in &req.slots {
         sqlx::query(
-            "INSERT INTO course_schedule (course_id, day_number, weekday, start_time, end_time, location, timezone) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO course_schedule (course_id, day_number, weekday, start_time, end_time, location, meeting_url, timezone) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&id)
         .bind(s.day_number)
@@ -412,6 +415,7 @@ pub async fn update_schedule(
         .bind(&s.start_time)
         .bind(s.end_time.as_deref().filter(|e| !e.is_empty()))
         .bind(s.location.trim())
+        .bind(s.meeting_url.as_deref().map(str::trim).filter(|u| !u.is_empty()))
         .bind(&req.timezone)
         .execute(&mut *tx)
         .await?;

@@ -16,8 +16,8 @@ use crate::{
         assignments::{self as assignment_repo, AssignmentFilter},
         resources::{self as resource_repo, ResourceFilter},
     },
-    services::{audit, curriculum, progress},
-    util::{clean_list, is_http_url, new_id, now, parse_opt_date, to_json, Validator},
+    services::{audit, curriculum, progress, schedule},
+    util::{clean_list, fmt_ts, is_http_url, new_id, now, parse_opt_date, to_json, Validator},
     AppState,
 };
 
@@ -499,6 +499,7 @@ fn validate_lesson_fields(
     day: i64,
     minutes: i64,
     video: Option<&str>,
+    meeting: Option<&str>,
 ) {
     v.len(title, "title", 1, 200)
         .len(summary, "summary", 0, 2000)
@@ -508,6 +509,9 @@ fn validate_lesson_fields(
         .check((0..=10_000).contains(&minutes), "estimated_minutes", "Invalid duration");
     if let Some(u) = video.filter(|u| !u.is_empty()) {
         v.check(is_http_url(u) && u.starts_with("https://"), "video_url", "Video URL must be an https link");
+    }
+    if let Some(u) = meeting.filter(|u| !u.is_empty()) {
+        v.check(is_http_url(u) && u.starts_with("https://"), "meeting_url", "Class link must be an https link");
     }
 }
 
@@ -521,16 +525,27 @@ pub async fn create_lesson(
     let w = load_week(&state, &id).await?;
     let day = req.day_number.unwrap_or(1);
     let video = req.video_url.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let meeting = req.meeting_url.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     let mut v = Validator::new();
-    validate_lesson_fields(&mut v, &req.title, &req.summary, &req.content_md, &req.lab_md, day, req.estimated_minutes, video.as_deref());
+    validate_lesson_fields(
+        &mut v,
+        &req.title,
+        &req.summary,
+        &req.content_md,
+        &req.lab_md,
+        day,
+        req.estimated_minutes,
+        video.as_deref(),
+        meeting.as_deref(),
+    );
     v.finish()?;
     let objectives = clean_list(req.objectives, "objectives", 20)?;
     let position = curriculum::next_lesson_position(&state.pool, &w.id).await?;
     let lid = new_id();
     let ts = now();
     sqlx::query(
-        "INSERT INTO lessons (id, week_id, day_number, position, title, summary, content_md, lab_md, video_url, objectives, estimated_minutes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO lessons (id, week_id, day_number, position, title, summary, content_md, lab_md, video_url, meeting_url, objectives, estimated_minutes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&lid)
     .bind(&w.id)
@@ -541,6 +556,7 @@ pub async fn create_lesson(
     .bind(&req.content_md)
     .bind(&req.lab_md)
     .bind(&video)
+    .bind(&meeting)
     .bind(to_json(&objectives))
     .bind(req.estimated_minutes)
     .bind(&ts)
@@ -640,7 +656,28 @@ pub async fn get_lesson(State(state): State<AppState>, user: AuthUser, Path(id):
     let previous_lesson_id = pos.and_then(|p| p.checked_sub(1)).map(|p| visible[p].clone());
     let next_lesson_id = pos.and_then(|p| visible.get(p + 1)).map(|s| (*s).clone());
 
+    // Live class: the lesson's own link wins over its weekly schedule slot; the time follows from
+    // the course start date and the slot of the lesson's course day.
+    let sched = super::courses::load_schedule(&state, &course.id).await?;
+    let slot = sched.slots.iter().find(|s| s.day_number == lesson.day_number);
+    let class_meeting_url = lesson.meeting_url.clone().or_else(|| slot.and_then(|s| s.meeting_url.clone()));
+    let class_times = (|| {
+        let slot = slot?;
+        let start = chrono::NaiveDate::parse_from_str(course.start_date.as_deref()?, "%Y-%m-%d").ok()?;
+        let tz: chrono_tz::Tz = sched.timezone.parse().unwrap_or(chrono_tz::UTC);
+        let date = schedule::class_date(start, week.week_number, slot.weekday as u32);
+        Some(schedule::class_times(
+            date,
+            schedule::parse_time(&slot.start_time)?,
+            slot.end_time.as_deref().and_then(schedule::parse_time),
+            tz,
+        ))
+    })();
+
     Ok(json(LessonDetail {
+        class_meeting_url,
+        class_starts_at: class_times.map(|(s, _)| fmt_ts(s)),
+        class_ends_at: class_times.and_then(|(_, e)| e).map(fmt_ts),
         course_id: course.id,
         week_number: week.week_number,
         week_title: week.title,
@@ -683,8 +720,13 @@ pub async fn update_lesson(
         Some(v) => Some(v.trim().to_string()),
         None => l.video_url.clone(),
     };
+    let meeting = match req.meeting_url {
+        Some(v) if v.trim().is_empty() => None,
+        Some(v) => Some(v.trim().to_string()),
+        None => l.meeting_url.clone(),
+    };
     let mut v = Validator::new();
-    validate_lesson_fields(&mut v, &title, &summary, &content, &lab, day, minutes, video.as_deref());
+    validate_lesson_fields(&mut v, &title, &summary, &content, &lab, day, minutes, video.as_deref(), meeting.as_deref());
     v.check(matches!(status.as_str(), "draft" | "published"), "status", "Status must be draft or published").finish()?;
     let objectives = match req.objectives {
         Some(o) => clean_list(o, "objectives", 20)?,
@@ -693,7 +735,7 @@ pub async fn update_lesson(
     let ts = now();
     let mut tx = state.pool.begin().await?;
     sqlx::query(
-        "UPDATE lessons SET title = ?, summary = ?, content_md = ?, lab_md = ?, video_url = ?, objectives = ?, day_number = ?,
+        "UPDATE lessons SET title = ?, summary = ?, content_md = ?, lab_md = ?, video_url = ?, meeting_url = ?, objectives = ?, day_number = ?,
          estimated_minutes = ?, status = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END,
          updated_at = ? WHERE id = ?",
     )
@@ -702,6 +744,7 @@ pub async fn update_lesson(
     .bind(&content)
     .bind(&lab)
     .bind(&video)
+    .bind(&meeting)
     .bind(to_json(&objectives))
     .bind(day)
     .bind(minutes)

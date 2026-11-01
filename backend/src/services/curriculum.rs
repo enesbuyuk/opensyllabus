@@ -88,8 +88,8 @@ async fn copy_lesson(tx: &mut Transaction<'_, Sqlite>, l: &Lesson, week_id: &str
     let id = new_id();
     let ts = now();
     sqlx::query(
-        "INSERT INTO lessons (id, week_id, day_number, position, title, summary, content_md, lab_md, video_url, objectives, estimated_minutes, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)",
+        "INSERT INTO lessons (id, week_id, day_number, position, title, summary, content_md, lab_md, video_url, meeting_url, objectives, estimated_minutes, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)",
     )
     .bind(&id)
     .bind(week_id)
@@ -100,6 +100,7 @@ async fn copy_lesson(tx: &mut Transaction<'_, Sqlite>, l: &Lesson, week_id: &str
     .bind(&l.content_md)
     .bind(&l.lab_md)
     .bind(&l.video_url)
+    .bind(&l.meeting_url)
     .bind(crate::util::to_json(&l.objectives.0))
     .bind(l.estimated_minutes)
     .bind(&ts)

@@ -81,6 +81,7 @@ fn event_entry(e: &CalendarEvent, starts_at: String, ends_at: Option<String>, se
         course_id: e.course_id.clone(),
         course_title: e.course_title.clone(),
         link: None,
+        meeting_url: None,
         event_id: Some(e.id.clone()),
         series,
     }
@@ -160,6 +161,7 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
                 course_id: course.id.clone(),
                 course_title: course.title.clone(),
                 link: Some(format!("/assignments/{}", a.assignment.id)),
+                meeting_url: None,
                 event_id: None,
                 series: None,
             });
@@ -208,6 +210,7 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
                 course_id: course.id.clone(),
                 course_title: course.title.clone(),
                 link,
+                meeting_url: None,
                 event_id: None,
                 series: None,
             });
@@ -245,16 +248,27 @@ async fn class_entries(
         week_status: String,
         available_from: Option<String>,
         week_number: i64,
+        meeting_url: Option<String>,
     }
     let lessons: Vec<Row> = sqlx::query_as(
-        "SELECT l.id, l.title, l.day_number, l.status, w.status AS week_status, w.available_from, w.week_number
+        "SELECT l.id, l.title, l.day_number, l.status, w.status AS week_status, w.available_from, w.week_number, l.meeting_url
          FROM lessons l JOIN weeks w ON w.id = l.week_id WHERE w.course_id = ? ORDER BY w.week_number, l.day_number, l.position",
     )
     .bind(&course.id)
     .fetch_all(&state.pool)
     .await?;
     let mut out = Vec::new();
-    for Row { id: lesson_id, title, day_number: day, status: lesson_status, week_status, available_from, week_number } in lessons {
+    for Row {
+        id: lesson_id,
+        title,
+        day_number: day,
+        status: lesson_status,
+        week_status,
+        available_from,
+        week_number,
+        meeting_url: lesson_meeting,
+    } in lessons
+    {
         let Some(slot) = sched.slots.iter().find(|s| s.day_number == day) else { continue };
         let Some(start_time) = schedule::parse_time(&slot.start_time) else { continue };
         let date = schedule::class_date(start, week_number, slot.weekday as u32);
@@ -276,6 +290,7 @@ async fn class_entries(
             course_id: course.id.clone(),
             course_title: course.title.clone(),
             link: open.then(|| format!("/lessons/{lesson_id}")),
+            meeting_url: if open { lesson_meeting.or_else(|| slot.meeting_url.clone()) } else { slot.meeting_url.clone() },
             event_id: None,
             series: None,
         });

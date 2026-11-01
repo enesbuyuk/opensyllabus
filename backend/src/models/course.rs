@@ -103,6 +103,9 @@ pub struct ScheduleSlot {
     pub end_time: Option<String>,
     #[serde(default)]
     pub location: String,
+    /// Default live class link (https) for this weekly class; a lesson may override it.
+    #[serde(default)]
+    pub meeting_url: Option<String>,
 }
 
 /// Weekly class times of a course. Lesson dates follow from the course start date.

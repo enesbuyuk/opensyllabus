@@ -16,8 +16,9 @@ import {
   Users,
 } from 'lucide-react'
 import { Link } from 'react-router'
-import { miscApi } from '@/api/endpoints'
+import { calendarApi, miscApi } from '@/api/endpoints'
 import { SimpleBarChart } from '@/components/charts'
+import { classPhase, LiveClassCard } from '@/components/live-class'
 import { EmptyState, ErrorState, PageHeader, PageSkeleton, StatCard } from '@/components/page'
 import { AssignmentStateBadge, SubmissionStatusBadge } from '@/components/status'
 import { Badge } from '@/components/ui/badge'
@@ -63,6 +64,34 @@ function DeadlineRow({ a }: { a: AssignmentListItem }) {
       </div>
       {a.state && <AssignmentStateBadge state={a.state} />}
     </Link>
+  )
+}
+
+/** The next scheduled class of the coming week (or the one running now), with its join link. */
+function NextClass() {
+  const { timezone } = useUser()
+  const q = useQuery({
+    queryKey: ['calendar', 'next-class'],
+    queryFn: () => {
+      const now = new Date()
+      return calendarApi.entries({ from: new Date(now.getTime() - 3 * 3600_000).toISOString(), to: new Date(now.getTime() + 7 * 86_400_000).toISOString() })
+    },
+    refetchInterval: 5 * 60_000,
+  })
+  const next = (q.data ?? [])
+    .filter((e) => e.kind === 'class' && classPhase(e.starts_at, e.ends_at) !== 'ended')
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0]
+  if (!next) return null
+  const live = classPhase(next.starts_at, next.ends_at) === 'live'
+  return (
+    <LiveClassCard
+      url={next.meeting_url}
+      startsAt={next.starts_at}
+      endsAt={next.ends_at}
+      timezone={timezone}
+      title={`${live ? 'Class now' : 'Next class'}: ${next.title}`}
+      lessonLink={next.link ?? undefined}
+    />
   )
 }
 
@@ -126,6 +155,8 @@ function StudentDashboardView({ data }: { data: StudentDashboard }) {
         />
         <StatCard label="Average grade" value={course.average_grade_percent != null ? `${course.average_grade_percent}%` : '—'} icon={Star} hint={`${course.grades.length} graded`} />
       </div>
+
+      <NextClass />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -304,6 +335,8 @@ function InstructorDashboard({ data }: { data: AdminDashboard }) {
         <StatCard label="Overdue" value={data.overdue_assignments} icon={TriangleAlert} tone={data.overdue_assignments ? 'destructive' : 'default'} hint="Missing submissions" />
         <StatCard label="Avg. completion" value={data.average_completion != null ? `${data.average_completion}%` : '—'} icon={TrendingUp} />
       </div>
+
+      <NextClass />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

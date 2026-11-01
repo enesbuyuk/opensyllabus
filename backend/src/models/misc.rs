@@ -191,6 +191,8 @@ pub struct CalendarEntry {
     pub course_id: String,
     pub course_title: String,
     pub link: Option<String>,
+    /// Live class link of a scheduled class (`kind = class`).
+    pub meeting_url: Option<String>,
     /// Only for instructor-defined events (editable).
     pub event_id: Option<String>,
     /// Set when the entry is one occurrence of a repeating event.

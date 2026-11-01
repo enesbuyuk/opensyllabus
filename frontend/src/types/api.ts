@@ -146,6 +146,8 @@ export interface Lesson {
   content_md: string
   lab_md: string
   video_url: string | null
+  /** Live class link for this lesson; overrides the schedule slot's link. */
+  meeting_url: string | null
   objectives: string[]
   estimated_minutes: number
   status: PublishStatus
@@ -189,6 +191,10 @@ export interface LessonDetail extends Lesson {
   assignments: AssignmentListItem[]
   previous_lesson_id: string | null
   next_lesson_id: string | null
+  /** Effective live class link (lesson link, else schedule slot link). */
+  class_meeting_url: string | null
+  class_starts_at: string | null
+  class_ends_at: string | null
 }
 
 export type AssignmentKind = 'written' | 'file_upload' | 'code' | 'lab_report' | 'research' | 'repository' | 'mixed'
@@ -467,6 +473,8 @@ export interface ScheduleSlot {
   start_time: string
   end_time: string | null
   location: string
+  /** Default live class link (https) for this weekly class. */
+  meeting_url?: string | null
 }
 
 export interface CourseSchedule {
@@ -505,6 +513,8 @@ export interface CalendarEntry {
   course_id: string
   course_title: string
   link: string | null
+  /** Live class link of a scheduled class. */
+  meeting_url: string | null
   event_id: string | null
   series: EventSeries | null
 }

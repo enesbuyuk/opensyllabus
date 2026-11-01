@@ -16,7 +16,7 @@ import { WEEKDAYS } from '@/lib/labels'
 import { formatPlainDate, TIMEZONES } from '@/lib/utils'
 import type { CourseListItem, CourseSchedule, ScheduleSlot } from '@/types/api'
 
-type Row = { enabled: boolean; weekday: number; start_time: string; end_time: string; location: string }
+type Row = { enabled: boolean; weekday: number; start_time: string; end_time: string; location: string; meeting_url: string }
 
 /** Default weekday for course day N: spread over Mon/Wed/Fri/... like a typical timetable. */
 const DEFAULT_WEEKDAYS = [1, 3, 5, 2, 4, 6, 7]
@@ -25,8 +25,8 @@ function rowsFrom(days: number, slots: ScheduleSlot[]): Row[] {
   return Array.from({ length: days }, (_, i) => {
     const s = slots.find((x) => x.day_number === i + 1)
     return s
-      ? { enabled: true, weekday: s.weekday, start_time: s.start_time, end_time: s.end_time ?? '', location: s.location }
-      : { enabled: false, weekday: DEFAULT_WEEKDAYS[i], start_time: '10:00', end_time: '12:00', location: '' }
+      ? { enabled: true, weekday: s.weekday, start_time: s.start_time, end_time: s.end_time ?? '', location: s.location, meeting_url: s.meeting_url ?? '' }
+      : { enabled: false, weekday: DEFAULT_WEEKDAYS[i], start_time: '10:00', end_time: '12:00', location: '', meeting_url: '' }
   })
 }
 
@@ -34,6 +34,7 @@ function rowError(r: Row): string | null {
   if (!r.enabled) return null
   if (!r.start_time) return 'Enter a start time'
   if (r.end_time && r.end_time <= r.start_time) return 'End must be after the start'
+  if (r.meeting_url.trim() && !/^https:\/\/\S+$/.test(r.meeting_url.trim())) return 'Class link must start with https://'
   return null
 }
 
@@ -77,7 +78,7 @@ export function ScheduleEditor({ course }: { course: CourseListItem }) {
     save.mutate({
       timezone: tz,
       slots: rows.flatMap((r, i) =>
-        r.enabled ? [{ day_number: i + 1, weekday: r.weekday, start_time: r.start_time, end_time: r.end_time || null, location: r.location.trim() }] : [],
+        r.enabled ? [{ day_number: i + 1, weekday: r.weekday, start_time: r.start_time, end_time: r.end_time || null, location: r.location.trim(), meeting_url: r.meeting_url.trim() || null }] : [],
       ),
     })
 
@@ -127,6 +128,23 @@ export function ScheduleEditor({ course }: { course: CourseListItem }) {
                   </Field>
                   <Field label="Location" htmlFor={`sd-loc-${day}`}>
                     <Input id={`sd-loc-${day}`} value={r.location} disabled={!r.enabled} placeholder="e.g. Electronics Lab 2" maxLength={200} onChange={(e) => update(i, { location: e.target.value })} />
+                  </Field>
+                  <Field
+                    label="Class link"
+                    htmlFor={`sd-url-${day}`}
+                    hint="Zoom, Meet or Teams link students use to join this class. A lesson can override it."
+                    className="sm:col-span-4 sm:col-start-2"
+                  >
+                    <Input
+                      id={`sd-url-${day}`}
+                      type="url"
+                      inputMode="url"
+                      value={r.meeting_url}
+                      disabled={!r.enabled}
+                      placeholder="Paste a Zoom, Meet or Teams link"
+                      maxLength={2048}
+                      onChange={(e) => update(i, { meeting_url: e.target.value })}
+                    />
                   </Field>
                   {err && (
                     <p role="alert" className="text-xs text-destructive sm:col-span-5">

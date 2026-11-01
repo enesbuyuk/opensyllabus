@@ -206,3 +206,66 @@ async fn invalid_schedules_are_rejected() {
         .await
         .assert(StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+#[tokio::test]
+async fn class_links_come_from_the_schedule_and_lessons_can_override_them() {
+    let app = TestApp::new().await;
+    let mut admin = app.admin().await;
+    let (course_id, week_id, lessons) = published_course(&mut admin).await;
+    admin.patch(&format!("/api/v1/weeks/{week_id}"), json!({ "status": "published" })).await.assert(StatusCode::OK);
+    for l in &lessons {
+        admin.patch(&format!("/api/v1/lessons/{l}"), json!({ "status": "published" })).await.assert(StatusCode::OK);
+    }
+    admin.patch(&format!("/api/v1/courses/{course_id}"), json!({ "start_date": "2026-10-21" })).await.assert(StatusCode::OK);
+
+    // Only https links are accepted.
+    for bad in ["javascript:alert(1)", "http://meet.example.com/x", "not a link"] {
+        let slots = json!([{ "day_number": 1, "weekday": 1, "start_time": "10:00", "meeting_url": bad }]);
+        let r = admin.put(&format!("/api/v1/courses/{course_id}/schedule"), json!({ "timezone": "Europe/Istanbul", "slots": slots })).await;
+        assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        let r = admin.patch(&format!("/api/v1/lessons/{}", lessons[0]), json!({ "meeting_url": bad })).await;
+        assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+    }
+
+    let slots = json!([
+        { "day_number": 1, "weekday": 1, "start_time": "10:00", "end_time": "12:00", "meeting_url": "https://meet.example.com/monday" },
+        { "day_number": 2, "weekday": 3, "start_time": "14:00" }
+    ]);
+    let r = admin
+        .put(&format!("/api/v1/courses/{course_id}/schedule"), json!({ "timezone": "Europe/Istanbul", "slots": slots }))
+        .await
+        .assert(StatusCode::OK);
+    assert_eq!(r.body["slots"][0]["meeting_url"], "https://meet.example.com/monday");
+    assert_eq!(r.body["slots"][1]["meeting_url"], Value::Null);
+
+    // Day 2 has no slot link; the lesson sets its own.
+    admin
+        .patch(&format!("/api/v1/lessons/{}", lessons[1]), json!({ "meeting_url": "https://zoom.example.com/j/2" }))
+        .await
+        .assert(StatusCode::OK);
+
+    create_student(&mut admin, "s1@example.com", &course_id).await;
+    let mut s = app.client();
+    s.login("s1@example.com", "student-pass-1").await.assert(StatusCode::OK);
+
+    let l0 = s.get(&format!("/api/v1/lessons/{}", lessons[0])).await.assert(StatusCode::OK);
+    assert_eq!(l0.body["class_meeting_url"], "https://meet.example.com/monday");
+    assert_eq!(l0.body["class_starts_at"], "2026-10-26T07:00:00.000Z");
+    assert_eq!(l0.body["class_ends_at"], "2026-10-26T09:00:00.000Z");
+    let l1 = s.get(&format!("/api/v1/lessons/{}", lessons[1])).await.assert(StatusCode::OK);
+    assert_eq!(l1.body["class_meeting_url"], "https://zoom.example.com/j/2");
+    let l2 = s.get(&format!("/api/v1/lessons/{}", lessons[2])).await.assert(StatusCode::OK);
+    assert_eq!(l2.body["class_meeting_url"], Value::Null, "day 3 has no slot");
+
+    let r = s.get(&format!("/api/v1/calendar?{WINDOW}&course_id={course_id}")).await.assert(StatusCode::OK);
+    let link_of = |lesson: &str| {
+        r.body.as_array().unwrap().iter().find(|e| e["link"] == format!("/lessons/{lesson}")).map(|e| e["meeting_url"].clone()).unwrap()
+    };
+    assert_eq!(link_of(&lessons[0]), "https://meet.example.com/monday");
+    assert_eq!(link_of(&lessons[1]), "https://zoom.example.com/j/2");
+
+    // Clearing the lesson link falls back to the slot (none for day 2).
+    admin.patch(&format!("/api/v1/lessons/{}", lessons[1]), json!({ "meeting_url": "" })).await.assert(StatusCode::OK);
+    let l1 = s.get(&format!("/api/v1/lessons/{}", lessons[1])).await.assert(StatusCode::OK);
+    assert_eq!(l1.body["class_meeting_url"], Value::Null);
+}

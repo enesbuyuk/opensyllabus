@@ -196,14 +196,19 @@ describe('ScheduleEditor', () => {
     await userEvent.clear(end)
     await userEvent.type(end, '16:00')
     await userEvent.selectOptions(within(day2).getByLabelText('Weekday'), 'Wednesday')
+    const link = within(day2).getByLabelText('Class link')
+    await userEvent.type(link, 'http://meet.example.com/abc')
+    expect(within(day2).getByRole('alert')).toHaveTextContent('Class link must start with https://')
+    await userEvent.clear(link)
+    await userEvent.type(link, 'https://meet.example.com/abc')
     await userEvent.click(screen.getByRole('button', { name: 'Save schedule' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => i?.method === 'PUT')).toBe(true))
     const [, init] = fetchMock.mock.calls.find(([, i]) => i?.method === 'PUT')!
     expect(JSON.parse(String(init?.body))).toEqual({
       timezone: 'Europe/Istanbul',
       slots: [
-        { day_number: 1, weekday: 1, start_time: '10:00', end_time: '12:00', location: 'Lab 2' },
-        { day_number: 2, weekday: 3, start_time: '10:00', end_time: '16:00', location: '' },
+        { day_number: 1, weekday: 1, start_time: '10:00', end_time: '12:00', location: 'Lab 2', meeting_url: null },
+        { day_number: 2, weekday: 3, start_time: '10:00', end_time: '16:00', location: '', meeting_url: 'https://meet.example.com/abc' },
       ],
     })
   })

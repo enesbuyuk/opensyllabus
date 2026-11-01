@@ -29,6 +29,7 @@ const schema = z.object({
   content_md: z.string().max(200_000),
   lab_md: z.string().max(100_000),
   video_url: z.string().trim().refine((v) => !v || /^https:\/\/.+/.test(v), 'Must be an https link'),
+  meeting_url: z.string().trim().refine((v) => !v || /^https:\/\/\S+$/.test(v), 'Must be an https link'),
   objectives: z.array(z.string()),
   estimated_minutes: z.coerce.number<number>().int().min(0).max(10_000),
   prerequisite_ids: z.array(z.string()),
@@ -80,6 +81,7 @@ export function LessonEditorPage() {
       content_md: l.content_md,
       lab_md: l.lab_md,
       video_url: l.video_url ?? '',
+      meeting_url: l.meeting_url ?? '',
       objectives: l.objectives,
       estimated_minutes: l.estimated_minutes,
       prerequisite_ids: l.prerequisites.map((p) => p.id),
@@ -215,6 +217,18 @@ export function LessonEditorPage() {
                 <Input id="l-video" type="url" placeholder="https://www.youtube.com/watch?v=…" {...form.register('video_url')} />
               </Field>
               {video && /^https:\/\//.test(video) && <VideoEmbed url={video} title="Video preview" />}
+              <Field
+                label="Class link"
+                htmlFor="l-meeting"
+                error={errors.meeting_url?.message}
+                hint={
+                  !l.meeting_url && l.class_meeting_url
+                    ? `Empty uses the class schedule link (${l.class_meeting_url}).`
+                    : 'Zoom, Meet or Teams link for this lesson\'s live class. Empty uses the class schedule link.'
+                }
+              >
+                <Input id="l-meeting" type="url" inputMode="url" placeholder={l.class_meeting_url && !l.meeting_url ? l.class_meeting_url : 'Paste a Zoom, Meet or Teams link'} {...form.register('meeting_url')} />
+              </Field>
               <Field label="Learning objectives">
                 <Controller control={form.control} name="objectives" render={({ field }) => <ListEditor value={field.value ?? []} onChange={field.onChange} placeholder="Add an objective" />} />
               </Field>
