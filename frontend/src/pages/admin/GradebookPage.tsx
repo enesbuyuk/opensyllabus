@@ -70,7 +70,7 @@ export function GradebookPage() {
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Tabs value={mode} onValueChange={(v) => setMode(v as 'assignments' | 'weeks')}>
-          <TabsList>
+          <TabsList variant="segmented">
             <TabsTrigger value="assignments">By assignment</TabsTrigger>
             <TabsTrigger value="weeks">By week</TabsTrigger>
           </TabsList>

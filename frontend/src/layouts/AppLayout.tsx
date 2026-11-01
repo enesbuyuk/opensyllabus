@@ -28,8 +28,8 @@ function Logo({ collapsed }: { collapsed?: boolean }) {
   const settings = usePlatformSettings()
   return (
     <Link to="/" className="flex items-center gap-2.5 rounded-md px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-      <img src="/favicon.svg" alt="" className="size-7 rounded-md" />
-      {!collapsed && <span className="truncate text-sm font-semibold tracking-tight">{settings.data?.platform_name ?? 'OpenSyllabus'}</span>}
+      <img src="/favicon.svg" alt="" className="size-7" />
+      {!collapsed && <span className="truncate text-[17px] font-bold tracking-tight">{settings.data?.platform_name ?? 'OpenSyllabus'}</span>}
     </Link>
   )
 }
@@ -45,13 +45,13 @@ function NavSection({ items, collapsed, onNavigate }: { items: NavItem[]; collap
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-                isActive && 'bg-accent text-foreground',
+                'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
+                isActive && 'bg-primary-soft text-foreground [&>svg]:text-primary hover:bg-primary-soft',
                 collapsed && 'justify-center px-0',
               )
             }
           >
-            <item.icon className="size-4 shrink-0" />
+            <item.icon className="size-[18px] shrink-0" />
             {!collapsed && <span className="truncate">{item.label}</span>}
           </NavLink>
         )
@@ -68,7 +68,7 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed?: boolean; onNavigat
       <NavSection items={MAIN_NAV} collapsed={collapsed} onNavigate={onNavigate} />
       {isAdmin && (
         <div className="space-y-1">
-          {!collapsed && <div className="px-2.5 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground/80 uppercase">Management</div>}
+          {!collapsed && <div className="px-2.5 pb-1 text-xs font-semibold tracking-wide text-muted-foreground/80 uppercase">Management</div>}
           {collapsed && <div className="mx-auto mb-2 h-px w-6 bg-border" />}
           <NavSection items={ADMIN_NAV} collapsed={collapsed} onNavigate={onNavigate} />
         </div>
@@ -214,8 +214,8 @@ export function AppLayout() {
         Skip to content
       </a>
       <div className="flex h-dvh overflow-hidden">
-        <aside className={cn('hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 lg:flex', collapsed ? 'w-[60px]' : 'w-60')}>
-          <div className={cn('flex h-14 items-center border-b border-sidebar-border px-3', collapsed && 'justify-center')}>
+        <aside className={cn('hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 lg:flex', collapsed ? 'w-[64px]' : 'w-[248px]')}>
+          <div className={cn('flex h-[68px] items-center border-b border-sidebar-border px-4', collapsed && 'justify-center')}>
             <Logo collapsed={collapsed} />
           </div>
           <SidebarBody collapsed={collapsed} />
@@ -229,7 +229,7 @@ export function AppLayout() {
 
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent>
-            <div className="flex h-14 items-center border-b border-sidebar-border px-4">
+            <div className="flex h-[68px] items-center border-b border-sidebar-border px-4">
               <Logo />
             </div>
             <SidebarBody onNavigate={() => setMobileOpen(false)} />
@@ -237,7 +237,7 @@ export function AppLayout() {
         </Sheet>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur sm:px-5">
+          <header className="flex h-[68px] shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur sm:px-7">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
               <Menu />
             </Button>
@@ -246,10 +246,10 @@ export function AppLayout() {
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="hidden h-8 w-56 items-center gap-2 rounded-md border bg-muted/40 px-2.5 text-[13px] text-muted-foreground transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:flex"
+                className="hidden h-10 w-72 items-center gap-2 rounded-md border bg-card px-3 text-sm text-muted-foreground transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:flex"
               >
-                <Search className="size-3.5" />
-                <span className="flex-1 text-left">Search…</span>
+                <Search className="size-4" />
+                <span className="flex-1 text-left">Search courses, lessons…</span>
                 <Kbd>⌘K</Kbd>
               </button>
               <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSearchOpen(true)} aria-label="Search">
@@ -263,7 +263,7 @@ export function AppLayout() {
             </div>
           </header>
           <main id="main" ref={mainRef} className="flex-1 overflow-y-auto">
-            <div key={location.pathname} className="mx-auto w-full max-w-7xl animate-fade-in px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+            <div key={location.pathname} className="mx-auto w-full max-w-7xl animate-fade-in px-4 py-6 sm:px-6 lg:px-7 lg:py-7">
               <Outlet />
             </div>
           </main>

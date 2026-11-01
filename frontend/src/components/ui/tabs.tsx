@@ -4,15 +4,35 @@ import { cn } from '@/lib/utils'
 
 export const Tabs = P.Root
 
-export function TabsList({ className, ...props }: React.ComponentProps<typeof P.List>) {
-  return <P.List className={cn('inline-flex h-9 items-center gap-1 rounded-lg bg-muted p-1 text-muted-foreground', className)} {...props} />
+type TabsVariant = 'underline' | 'segmented'
+const VariantContext = React.createContext<TabsVariant>('underline')
+
+/** `underline` for page/section tabs (design system default); `segmented` for compact view toggles. */
+export function TabsList({ className, variant = 'underline', ...props }: React.ComponentProps<typeof P.List> & { variant?: TabsVariant }) {
+  return (
+    <VariantContext.Provider value={variant}>
+      <P.List
+        className={cn(
+          variant === 'underline'
+            ? 'inline-flex h-10 max-w-full items-end gap-1 overflow-x-auto border-b text-muted-foreground'
+            : 'inline-flex h-9 items-center gap-1 rounded-md border bg-muted/60 p-1 text-muted-foreground',
+          className,
+        )}
+        {...props}
+      />
+    </VariantContext.Provider>
+  )
 }
 
 export function TabsTrigger({ className, ...props }: React.ComponentProps<typeof P.Trigger>) {
+  const variant = React.useContext(VariantContext)
   return (
     <P.Trigger
       className={cn(
-        'inline-flex h-7 items-center justify-center gap-1.5 rounded-md px-3 text-[13px] font-medium whitespace-nowrap transition outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs dark:data-[state=active]:bg-input/50 [&_svg]:size-3.5',
+        'inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap transition outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 [&_svg]:size-3.5',
+        variant === 'underline'
+          ? '-mb-px h-10 border-b-2 border-transparent px-3 text-sm data-[state=active]:border-primary data-[state=active]:font-semibold data-[state=active]:text-foreground'
+          : 'h-7 rounded-sm px-3 text-[13px] data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs',
         className,
       )}
       {...props}

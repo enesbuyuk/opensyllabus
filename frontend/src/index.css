@@ -4,69 +4,75 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Light theme */
+/* Design tokens from "OpenSyllabus Design System v1.0": neutral surfaces, one orange accent. */
+
+/* Light theme (mirrors the dark tokens) */
 :root {
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.2 0.006 270);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.006 270);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.006 270);
-  --primary: oklch(0.52 0.17 268);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.003 270);
-  --secondary-foreground: oklch(0.25 0.006 270);
-  --muted: oklch(0.965 0.003 270);
-  --muted-foreground: oklch(0.52 0.012 270);
-  --accent: oklch(0.955 0.005 270);
-  --accent-foreground: oklch(0.22 0.006 270);
-  --destructive: oklch(0.58 0.21 25);
-  --success: oklch(0.6 0.14 155);
-  --warning: oklch(0.72 0.15 70);
-  --info: oklch(0.6 0.13 240);
-  --border: oklch(0.915 0.004 270);
-  --input: oklch(0.9 0.004 270);
-  --ring: oklch(0.6 0.15 268);
-  --sidebar: oklch(0.975 0.002 270);
-  --sidebar-border: oklch(0.92 0.004 270);
-  --chart-1: oklch(0.55 0.17 268);
-  --chart-2: oklch(0.6 0.12 175);
-  --chart-3: oklch(0.72 0.14 75);
-  --chart-4: oklch(0.62 0.18 330);
-  --chart-5: oklch(0.6 0.12 230);
-  --radius: 0.6rem;
+  --background: #fafafa;
+  --foreground: #111113;
+  --card: #ffffff;
+  --card-foreground: #111113;
+  --popover: #ffffff;
+  --popover-foreground: #111113;
+  --primary: #c4580c;
+  --primary-foreground: #ffffff;
+  --primary-soft: #fdeedf;
+  --secondary: #f1f1f3;
+  --secondary-foreground: #1b1b1f;
+  --muted: #f1f1f3;
+  --muted-foreground: #63636b;
+  --accent: #f0f0f2;
+  --accent-foreground: #111113;
+  --destructive: #d13f3b;
+  --success: #1f8f47;
+  --warning: #b7740f;
+  --info: #2f6fd6;
+  --neutral: #6b6b73;
+  --border: #e4e4e7;
+  --input: #dcdce0;
+  --ring: #c4580c;
+  --sidebar: #f5f5f6;
+  --sidebar-border: #e4e4e7;
+  --chart-1: #c4580c;
+  --chart-2: #1f8f47;
+  --chart-3: #b7740f;
+  --chart-4: #2f6fd6;
+  --chart-5: #9a4fd0;
+  --radius: 10px;
 }
 
 /* Dark theme (default) */
 .dark {
-  --background: oklch(0.155 0.004 270);
-  --foreground: oklch(0.94 0.004 270);
-  --card: oklch(0.185 0.005 270);
-  --card-foreground: oklch(0.94 0.004 270);
-  --popover: oklch(0.2 0.005 270);
-  --popover-foreground: oklch(0.94 0.004 270);
-  --primary: oklch(0.7 0.14 268);
-  --primary-foreground: oklch(0.16 0.01 270);
-  --secondary: oklch(0.235 0.006 270);
-  --secondary-foreground: oklch(0.92 0.004 270);
-  --muted: oklch(0.225 0.005 270);
-  --muted-foreground: oklch(0.66 0.01 270);
-  --accent: oklch(0.245 0.007 270);
-  --accent-foreground: oklch(0.95 0.004 270);
-  --destructive: oklch(0.65 0.19 25);
-  --success: oklch(0.7 0.14 155);
-  --warning: oklch(0.79 0.14 75);
-  --info: oklch(0.7 0.12 240);
-  --border: oklch(0.27 0.006 270);
-  --input: oklch(0.3 0.007 270);
-  --ring: oklch(0.65 0.13 268);
-  --sidebar: oklch(0.135 0.004 270);
-  --sidebar-border: oklch(0.24 0.005 270);
-  --chart-1: oklch(0.66 0.14 268);
-  --chart-2: oklch(0.66 0.12 175);
-  --chart-3: oklch(0.8 0.13 80);
-  --chart-4: oklch(0.7 0.16 330);
-  --chart-5: oklch(0.7 0.11 230);
+  --background: #0a0a0b;
+  --foreground: #f2f2f3;
+  --card: #131315;
+  --card-foreground: #f2f2f3;
+  --popover: #161618;
+  --popover-foreground: #f2f2f3;
+  --primary: #f27a1a;
+  --primary-foreground: #0a0a0b;
+  --primary-soft: #2a1a0e;
+  --secondary: #1b1b1e;
+  --secondary-foreground: #f2f2f3;
+  --muted: #19191c;
+  --muted-foreground: #9a9aa2;
+  --accent: #1c1c1f;
+  --accent-foreground: #f2f2f3;
+  --destructive: #f27b78;
+  --success: #5fd47e;
+  --warning: #f5b94a;
+  --info: #7aa7f5;
+  --neutral: #b9b9c0;
+  --border: #232327;
+  --input: #2a2a2f;
+  --ring: #f27a1a;
+  --sidebar: #0e0e10;
+  --sidebar-border: #1d1d21;
+  --chart-1: #f27a1a;
+  --chart-2: #5fd47e;
+  --chart-3: #f5b94a;
+  --chart-4: #7aa7f5;
+  --chart-5: #c792f0;
 }
 
 @theme inline {
@@ -80,6 +86,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -90,6 +97,7 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-neutral: var(--neutral);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -100,10 +108,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Badges 7px, controls 10px, cards 14px */
+  --radius-sm: 7px;
+  --radius-md: var(--radius);
+  --radius-lg: 12px;
+  --radius-xl: 14px;
   --animate-fade-in: fade-in 160ms ease-out;
   --animate-slide-up: slide-up 180ms ease-out;
   --animate-shimmer: shimmer 1.6s ease-in-out infinite;

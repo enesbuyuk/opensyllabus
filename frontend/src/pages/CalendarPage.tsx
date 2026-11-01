@@ -449,7 +449,7 @@ export function CalendarPage() {
           </Button>
         </div>
         <Tabs value={view} onValueChange={(v) => setView(v as 'month' | 'agenda')}>
-          <TabsList>
+          <TabsList variant="segmented">
             <TabsTrigger value="month">Month</TabsTrigger>
             <TabsTrigger value="agenda">Agenda</TabsTrigger>
           </TabsList>

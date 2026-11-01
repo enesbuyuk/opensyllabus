@@ -9,8 +9,8 @@ export function PageHeader({ title, description, actions, eyebrow }: { title: Re
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0 space-y-1">
-        {eyebrow && <div className="text-xs font-medium text-muted-foreground">{eyebrow}</div>}
-        <h1 className="text-xl font-semibold tracking-tight text-balance sm:text-2xl">{title}</h1>
+        {eyebrow && <div className="text-[13px] font-medium text-muted-foreground">{eyebrow}</div>}
+        <h1 className="text-2xl font-bold tracking-tight text-balance sm:text-[28px] sm:leading-9">{title}</h1>
         {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
@@ -21,10 +21,10 @@ export function PageHeader({ title, description, actions, eyebrow }: { title: Re
 export function EmptyState({ icon: Icon, title, description, action, className }: { icon: LucideIcon; title: string; description?: string; action?: React.ReactNode; className?: string }) {
   return (
     <div className={cn('flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-12 text-center', className)}>
-      <div className="mb-3 flex size-10 items-center justify-center rounded-lg border bg-muted/50">
-        <Icon className="size-5 text-muted-foreground" />
+      <div className="mb-3 flex size-10 items-center justify-center rounded-md bg-primary-soft">
+        <Icon className="size-5 text-primary" />
       </div>
-      <h3 className="text-sm font-medium">{title}</h3>
+      <h3 className="text-sm font-semibold">{title}</h3>
       {description && <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
