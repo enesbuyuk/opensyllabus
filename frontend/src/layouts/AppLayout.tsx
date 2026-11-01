@@ -18,6 +18,7 @@ import { useUser } from '@/lib/auth'
 import { BreadcrumbProvider, useBreadcrumbState } from '@/lib/breadcrumbs'
 import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
+import { ThemeToggle } from '@/components/preferences'
 import { CommandSearch } from './command-search'
 import { ADMIN_NAV, MAIN_NAV, type NavItem } from './nav'
 import { NotificationCenter } from './notifications'
@@ -118,37 +119,6 @@ function ThemeMenuItems() {
         </DropdownMenuItem>
       ))}
     </>
-  )
-}
-
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
-  const isDark = theme === 'dark' || (theme === 'system' && document.documentElement.classList.contains('dark'))
-  const options = [
-    { dark: false, label: 'Light mode', icon: Sun },
-    { dark: true, label: 'Dark mode', icon: Moon },
-  ]
-  return (
-    <div role="group" aria-label="Theme" className="hidden items-center gap-0.5 rounded-full border bg-card p-1 sm:flex">
-      {options.map((o) => {
-        const active = o.dark === isDark
-        return (
-          <button
-            key={o.label}
-            type="button"
-            onClick={() => setTheme(o.dark ? 'dark' : 'light')}
-            aria-label={o.label}
-            aria-pressed={active}
-            className={cn(
-              'flex size-8 items-center justify-center rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&_svg]:size-4',
-              active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <o.icon />
-          </button>
-        )
-      })}
-    </div>
   )
 }
 
@@ -275,7 +245,7 @@ export function AppLayout() {
                 <Search />
               </Button>
               <NotificationCenter />
-              <ThemeToggle />
+              <ThemeToggle className="hidden sm:flex" />
               <div className="mx-1 hidden h-7 w-px bg-border sm:block" />
               <UserMenu />
             </div>

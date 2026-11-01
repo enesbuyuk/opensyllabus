@@ -1,16 +1,19 @@
 import * as React from 'react'
 import { BookOpen, ClipboardCheck, TrendingUp, type LucideIcon } from 'lucide-react'
+import { LanguageSwitcher, ThemeToggle } from '@/components/preferences'
 import { usePlatformSettings } from '@/hooks/queries'
+import { useT, type MessageKey } from '@/lib/i18n'
 
-const HIGHLIGHTS: { icon: LucideIcon; title: string; text: string }[] = [
-  { icon: BookOpen, title: 'Week-by-week curriculum', text: 'Lessons, labs and resources laid out in the order you learn them.' },
-  { icon: ClipboardCheck, title: 'Submissions and feedback', text: 'Hand in your work and get graded reviews from your instructor.' },
-  { icon: TrendingUp, title: 'Clear progress', text: 'See what is done, what is next and how you are doing.' },
+const HIGHLIGHTS: { icon: LucideIcon; title: MessageKey; text: MessageKey }[] = [
+  { icon: BookOpen, title: 'auth.brand.h1.title', text: 'auth.brand.h1.text' },
+  { icon: ClipboardCheck, title: 'auth.brand.h2.title', text: 'auth.brand.h2.text' },
+  { icon: TrendingUp, title: 'auth.brand.h3.title', text: 'auth.brand.h3.text' },
 ]
 
 /** Split layout for unauthenticated pages: brand panel on the left, form on the right. */
 export function AuthShell({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   const settings = usePlatformSettings()
+  const t = useT()
   const name = settings.data?.platform_name ?? 'OpenSyllabus'
   React.useEffect(() => {
     document.title = `${title} · ${name}`
@@ -36,20 +39,18 @@ export function AuthShell({ title, description, children }: { title: string; des
 
         <div className="relative max-w-md animate-slide-up">
           <h2 className="text-4xl leading-tight font-semibold tracking-tight text-balance xl:text-5xl">
-            Learn step by step, <span className="text-primary">week by week.</span>
+            {t('auth.brand.heading')} <span className="text-primary">{t('auth.brand.headingAccent')}</span>
           </h2>
-          <p className="mt-4 text-base text-muted-foreground">
-            Your course, assignments, feedback and progress in one place.
-          </p>
+          <p className="mt-4 text-base text-muted-foreground">{t('auth.brand.subtitle')}</p>
           <ul className="mt-10 space-y-6">
-            {HIGHLIGHTS.map(({ icon: Icon, title: t, text }) => (
-              <li key={t} className="flex gap-4">
+            {HIGHLIGHTS.map(({ icon: Icon, title, text }) => (
+              <li key={title} className="flex gap-4">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-card text-primary shadow-sm">
                   <Icon className="size-5" aria-hidden />
                 </span>
                 <div>
-                  <div className="font-medium">{t}</div>
-                  <div className="text-sm text-muted-foreground">{text}</div>
+                  <div className="font-medium">{t(title)}</div>
+                  <div className="text-sm text-muted-foreground">{t(text)}</div>
                 </div>
               </li>
             ))}
@@ -57,12 +58,16 @@ export function AuthShell({ title, description, children }: { title: string; des
         </div>
 
         <p className="relative text-xs text-muted-foreground">
-          {name === 'OpenSyllabus' ? 'Open-source learning platform' : 'Powered by OpenSyllabus'}
+          {name === 'OpenSyllabus' ? t('auth.brand.footer') : t('auth.brand.poweredBy')}
         </p>
       </aside>
 
       {/* Form panel */}
-      <main className="relative flex items-center justify-center px-4 py-10 sm:px-8">
+      <main className="relative flex items-center justify-center px-4 pt-24 pb-10 sm:px-8 lg:pt-10">
+        <div className="absolute top-5 right-4 z-10 flex items-center gap-2 sm:top-6 sm:right-8">
+          <LanguageSwitcher />
+          <ThemeToggle />
+        </div>
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_70%)] lg:hidden"
@@ -79,7 +84,7 @@ export function AuthShell({ title, description, children }: { title: string; des
           <div className="rounded-xl border bg-card p-6 shadow-sm">{children}</div>
           {settings.data?.support_email && (
             <p className="mt-6 text-center text-xs text-muted-foreground">
-              Need help? Contact{' '}
+              {t('auth.help')}{' '}
               <a className="text-foreground hover:underline" href={`mailto:${settings.data.support_email}`}>
                 {settings.data.support_email}
               </a>

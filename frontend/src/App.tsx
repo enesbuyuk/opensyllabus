@@ -5,6 +5,7 @@ import { PageSkeleton } from '@/components/page'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppLayout } from '@/layouts/AppLayout'
 import { AuthProvider, useAuth } from '@/lib/auth'
+import { LocaleProvider } from '@/lib/i18n'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { LoginPage } from '@/pages/LoginPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
@@ -74,6 +75,7 @@ function ThemedToaster() {
 export function App() {
   return (
     <ThemeProvider>
+      <LocaleProvider>
       <TooltipProvider delayDuration={300}>
         <BrowserRouter>
           <AuthProvider>
@@ -118,6 +120,7 @@ export function App() {
         </BrowserRouter>
         <ThemedToaster />
       </TooltipProvider>
+      </LocaleProvider>
     </ThemeProvider>
   )
 }

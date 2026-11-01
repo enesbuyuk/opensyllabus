@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { Navigate, useLocation, useNavigate } from 'react-router'
 import { z } from 'zod'
@@ -7,19 +8,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/lib/auth'
 import { errorMessage } from '@/lib/errors'
+import { useT } from '@/lib/i18n'
 import { AuthShell } from './AuthShell'
 
-const schema = z.object({
-  login: z.string().trim().min(1, 'Enter your email or username'),
-  password: z.string().min(1, 'Enter your password'),
-})
-type FormValues = z.infer<typeof schema>
+const makeSchema = (t: ReturnType<typeof useT>) =>
+  z.object({
+    login: z.string().trim().min(1, t('login.identifier.required')),
+    password: z.string().min(1, t('login.password.required')),
+  })
+type FormValues = z.infer<ReturnType<typeof makeSchema>>
 
 export function LoginPage() {
   const { user, login, loading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
+  const t = useT()
+  const schema = React.useMemo(() => makeSchema(t), [t])
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { login: '', password: '' } })
 
   if (!loading && user) return <Navigate to={from} replace />
@@ -35,23 +40,23 @@ export function LoginPage() {
 
   const { errors, isSubmitting } = form.formState
   return (
-    <AuthShell title="Sign in" description="Welcome back. Sign in to continue learning.">
+    <AuthShell title={t('login.title')} description={t('login.description')}>
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {errors.root && (
           <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[13px] text-destructive">
             {errors.root.message}
           </div>
         )}
-        <Field label="Email or username" htmlFor="login" error={errors.login?.message}>
+        <Field label={t('login.identifier')} htmlFor="login" error={errors.login?.message}>
           <Input id="login" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus aria-invalid={!!errors.login} {...form.register('login')} />
         </Field>
-        <Field label="Password" htmlFor="password" error={errors.password?.message}>
+        <Field label={t('login.password')} htmlFor="password" error={errors.password?.message}>
           <Input id="password" type="password" autoComplete="current-password" aria-invalid={!!errors.password} {...form.register('password')} />
         </Field>
         <Button type="submit" className="w-full" loading={isSubmitting}>
-          Sign in
+          {t('login.submit')}
         </Button>
-        <p className="text-center text-xs text-muted-foreground">Forgot your password? Ask your instructor for a reset link.</p>
+        <p className="text-center text-xs text-muted-foreground">{t('login.forgot')}</p>
       </form>
     </AuthShell>
   )
