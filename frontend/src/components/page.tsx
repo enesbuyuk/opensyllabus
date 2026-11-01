@@ -3,13 +3,16 @@ import { AlertTriangle, type LucideIcon } from 'lucide-react'
 import { Button } from './ui/button'
 import { Skeleton } from './ui/misc'
 import { errorMessage } from '@/lib/errors'
+import { useBreadcrumbState } from '@/lib/breadcrumbs'
 import { cn } from '@/lib/utils'
 
 export function PageHeader({ title, description, actions, eyebrow }: { title: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode; eyebrow?: React.ReactNode }) {
+  // The breadcrumb trail above the page already gives context; avoid repeating it as an eyebrow.
+  const hasTrail = useBreadcrumbState().length > 1
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0 space-y-1">
-        {eyebrow && <div className="text-[13px] font-medium text-muted-foreground">{eyebrow}</div>}
+        {eyebrow && !hasTrail && <div className="text-[13px] font-medium text-muted-foreground">{eyebrow}</div>}
         <h1 className="text-2xl font-bold tracking-tight text-balance sm:text-[28px] sm:leading-9">{title}</h1>
         {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
       </div>
@@ -66,15 +69,24 @@ export function PageSkeleton({ rows = 3 }: { rows?: number }) {
 }
 
 export function StatCard({ label, value, hint, icon: Icon, tone = 'default' }: { label: string; value: React.ReactNode; hint?: React.ReactNode; icon?: LucideIcon; tone?: 'default' | 'warning' | 'success' | 'destructive' }) {
-  const toneClass = { default: 'text-muted-foreground', warning: 'text-warning', success: 'text-success', destructive: 'text-destructive' }[tone]
+  const toneClass = {
+    default: 'bg-primary-soft text-primary',
+    warning: 'bg-warning/15 text-warning',
+    success: 'bg-success/15 text-success',
+    destructive: 'bg-destructive/15 text-destructive',
+  }[tone]
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-xs">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        {Icon && <Icon className={cn('size-4', toneClass)} />}
+    <div className="flex items-center gap-4 rounded-xl border bg-card p-5 shadow-xs">
+      {Icon && (
+        <span className={cn('flex size-11 shrink-0 items-center justify-center rounded-full', toneClass)}>
+          <Icon className="size-5" />
+        </span>
+      )}
+      <div className="min-w-0">
+        <div className="truncate text-[13px] font-medium text-muted-foreground">{label}</div>
+        <div className="mt-0.5 text-[26px] leading-8 font-bold tracking-tight tabular-nums">{value}</div>
+        {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
     </div>
   )
 }
@@ -84,7 +96,7 @@ export function Section({ title, description, actions, children, className }: { 
     <section className={cn('space-y-3', className)}>
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">{title}</h2>
+          <h2 className="text-base font-semibold">{title}</h2>
           {description && <p className="text-[13px] text-muted-foreground">{description}</p>}
         </div>
         {actions}

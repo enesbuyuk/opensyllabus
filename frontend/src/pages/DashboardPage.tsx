@@ -23,12 +23,14 @@ import { AssignmentStateBadge, SubmissionStatusBadge } from '@/components/status
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Avatar, Progress } from '@/components/ui/misc'
+import { Avatar, Progress, ProgressRing } from '@/components/ui/misc'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useUser } from '@/lib/auth'
 import { useBreadcrumbs } from '@/lib/breadcrumbs'
-import { cn, formatDate, formatDateTime, formatMinutes, formatScore, relativeTime } from '@/lib/utils'
+import { cn, formatDate, formatDateTime, formatMinutes, formatScore, nameParts, relativeTime } from '@/lib/utils'
 import type { AdminDashboard, AssignmentListItem, StudentDashboard } from '@/types/api'
+
+const firstNameOf = (name: string) => nameParts(name)[0] ?? ''
 
 function greeting() {
   const h = new Date().getHours()
@@ -67,7 +69,7 @@ function DeadlineRow({ a }: { a: AssignmentListItem }) {
 function StudentDashboardView({ data }: { data: StudentDashboard }) {
   const { user, timezone } = useUser()
   const course = data.courses[0]
-  const firstName = user.name.split(' ')[0]
+  const firstName = firstNameOf(user.name)
 
   if (!course) {
     return (
@@ -107,10 +109,12 @@ function StudentDashboardView({ data }: { data: StudentDashboard }) {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border bg-card p-4 shadow-xs">
-          <div className="text-xs font-medium text-muted-foreground">Course completion</div>
-          <div className="mt-2 text-2xl font-semibold tabular-nums">{course.completion_percent}%</div>
-          <Progress value={course.completion_percent} className="mt-3" />
+        <div className="flex items-center gap-4 rounded-xl border bg-card p-5 shadow-xs">
+          <ProgressRing value={course.completion_percent} size={64} stroke={6} />
+          <div className="min-w-0">
+            <div className="text-base font-semibold">Course completion</div>
+            <div className="text-xs text-muted-foreground">{course.current_week ? `Week ${course.current_week} of ${course.weeks.length}` : 'Not started yet'}</div>
+          </div>
         </div>
         <StatCard label="Lessons completed" value={`${course.lessons_completed} / ${course.lessons_total}`} icon={BookOpen} hint={`${course.lesson_percent}% of available lessons`} />
         <StatCard
@@ -283,7 +287,7 @@ function InstructorDashboard({ data }: { data: AdminDashboard }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`${greeting()}, ${user.name.split(' ')[0]}`}
+        title={`${greeting()}, ${firstNameOf(user.name)}`}
         description="Here's what needs your attention today."
         actions={
           <Button asChild>
@@ -297,7 +301,7 @@ function InstructorDashboard({ data }: { data: AdminDashboard }) {
         <StatCard label="Active students" value={data.total_students} icon={Users} />
         <StatCard label="Active courses" value={data.active_courses} icon={GraduationCap} />
         <StatCard label="Pending reviews" value={data.pending_submissions} icon={Inbox} tone={data.pending_submissions ? 'warning' : 'default'} />
-        <StatCard label="Overdue (missing)" value={data.overdue_assignments} icon={TriangleAlert} tone={data.overdue_assignments ? 'destructive' : 'default'} hint="Student × assignment pairs" />
+        <StatCard label="Overdue" value={data.overdue_assignments} icon={TriangleAlert} tone={data.overdue_assignments ? 'destructive' : 'default'} hint="Missing submissions" />
         <StatCard label="Avg. completion" value={data.average_completion != null ? `${data.average_completion}%` : '—'} icon={TrendingUp} />
       </div>
 

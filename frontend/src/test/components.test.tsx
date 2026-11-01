@@ -129,7 +129,10 @@ describe('LoginPage', () => {
 })
 
 describe('CalendarPage', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
 
   it('renders for an instructor and opens the repeat options of a new event', async () => {
     const admin = { id: 'a1', email: 'i@b.co', username: 'hoca', name: 'Hoca', role: 'admin', timezone: 'Europe/Istanbul' }
@@ -145,6 +148,8 @@ describe('CalendarPage', () => {
       const body = url.includes('/auth/me') ? { user: admin, csrf_token: 't' } : url.includes('/courses') ? [course] : url.includes('/calendar') ? [cls, series] : {}
       return new Response(JSON.stringify(body), { status: 200 })
     }))
+    // The agenda lists the current month and new events default to today: pin a Monday in the fixtures' month.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-19T09:00:00.000Z') })
     render(wrap(<AuthProvider><CalendarPage /></AuthProvider>))
     await userEvent.click(await screen.findByRole('tab', { name: 'Agenda' }))
     expect(await screen.findByText(/Every week on Mon, Wed/)).toBeInTheDocument()

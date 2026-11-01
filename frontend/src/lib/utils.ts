@@ -140,10 +140,17 @@ export function formatScore(score: number | null | undefined, max?: number) {
   return max != null ? `${s} / ${Number.isInteger(max) ? max : max.toFixed(1)}` : s
 }
 
+const NAME_TITLE = /^(dr|prof|doç|doc|assoc|asst|mr|mrs|ms)\.?$/i
+
+/** Words of a person's name without leading academic or courtesy titles ("Dr.", "Prof."). */
+export function nameParts(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  const rest = parts.filter((p) => !NAME_TITLE.test(p))
+  return rest.length ? rest : parts
+}
+
 export function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
+  return nameParts(name)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join('')

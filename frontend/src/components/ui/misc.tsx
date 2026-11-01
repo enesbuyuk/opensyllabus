@@ -53,12 +53,9 @@ export function Checkbox({ className, ...props }: React.ComponentProps<typeof Ch
   )
 }
 
-const AVATAR_TONES = ['bg-chart-1/20 text-chart-1', 'bg-chart-2/20 text-chart-2', 'bg-chart-3/20 text-chart-3', 'bg-chart-4/20 text-chart-4', 'bg-chart-5/20 text-chart-5']
-
 export function Avatar({ name, className }: { name: string; className?: string }) {
-  const tone = AVATAR_TONES[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_TONES.length]
   return (
-    <span className={cn('inline-flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold select-none', tone, className)} aria-hidden>
+    <span className={cn('inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-foreground ring-1 ring-border select-none', className)} aria-hidden>
       {initials(name) || '?'}
     </span>
   )
@@ -66,4 +63,30 @@ export function Avatar({ name, className }: { name: string; className?: string }
 
 export function Kbd({ className, ...props }: React.ComponentProps<'kbd'>) {
   return <kbd className={cn('pointer-events-none inline-flex h-5 items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground select-none', className)} {...props} />
+}
+
+/** Circular progress for a single percentage (design system: rings for single values, bars for weeks). */
+export function ProgressRing({ value, size = 72, stroke = 7, className, label }: { value: number; size?: number; stroke?: number; className?: string; label?: React.ReactNode }) {
+  const v = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0))
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  return (
+    <div className={cn('relative inline-flex shrink-0 items-center justify-center', className)} style={{ width: size, height: size }} role="img" aria-label={`${Math.round(v)}%`}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-muted" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - v / 100)}
+          className="stroke-primary transition-[stroke-dashoffset] duration-700 ease-out"
+        />
+      </svg>
+      <span className="absolute text-base font-bold tabular-nums">{label ?? `${Math.round(v)}%`}</span>
+    </div>
+  )
 }

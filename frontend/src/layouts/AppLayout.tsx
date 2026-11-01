@@ -79,10 +79,10 @@ function SidebarBody({ collapsed, onNavigate }: { collapsed?: boolean; onNavigat
 
 function Breadcrumbs() {
   const crumbs = useBreadcrumbState()
-  if (!crumbs.length) return null
+  if (crumbs.length < 2) return null
   return (
-    <nav aria-label="Breadcrumb" className="hidden min-w-0 md:block">
-      <ol className="flex items-center gap-1 text-[13px] text-muted-foreground">
+    <nav aria-label="Breadcrumb" className="mb-2 min-w-0">
+      <ol className="flex flex-wrap items-center gap-1 text-[13px] text-muted-foreground">
         {crumbs.map((c, i) => (
           <li key={i} className="flex min-w-0 items-center gap-1">
             {i > 0 && <ChevronRight className="size-3.5 shrink-0 opacity-60" />}
@@ -124,12 +124,31 @@ function ThemeMenuItems() {
 function ThemeToggle() {
   const { theme, setTheme } = useTheme()
   const isDark = theme === 'dark' || (theme === 'system' && document.documentElement.classList.contains('dark'))
+  const options = [
+    { dark: false, label: 'Light mode', icon: Sun },
+    { dark: true, label: 'Dark mode', icon: Moon },
+  ]
   return (
-    <Tooltip content={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
-      <Button variant="ghost" size="icon" onClick={() => setTheme(isDark ? 'light' : 'dark')} aria-label="Toggle theme">
-        {isDark ? <Sun /> : <Moon />}
-      </Button>
-    </Tooltip>
+    <div role="group" aria-label="Theme" className="hidden items-center gap-0.5 rounded-full border bg-card p-1 sm:flex">
+      {options.map((o) => {
+        const active = o.dark === isDark
+        return (
+          <button
+            key={o.label}
+            type="button"
+            onClick={() => setTheme(o.dark ? 'dark' : 'light')}
+            aria-label={o.label}
+            aria-pressed={active}
+            className={cn(
+              'flex size-8 items-center justify-center rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&_svg]:size-4',
+              active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <o.icon />
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -139,8 +158,9 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/50" aria-label="Account menu">
-          <Avatar name={user.name} />
+        <button className="flex items-center gap-2.5 rounded-full py-0.5 pr-1 pl-0.5 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 md:pr-3" aria-label="Account menu">
+          <Avatar name={user.name} className="size-9" />
+          <span className="hidden max-w-40 truncate text-sm font-semibold md:block">{user.name}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
@@ -241,29 +261,28 @@ export function AppLayout() {
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
               <Menu />
             </Button>
-            <Breadcrumbs />
-            <div className="ml-auto flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setSearchOpen(true)}
-                className="hidden h-10 w-72 items-center gap-2 rounded-md border bg-card px-3 text-sm text-muted-foreground transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:flex"
-              >
-                <Search className="size-4" />
-                <span className="flex-1 text-left">Search courses, lessons…</span>
-                <Kbd>⌘K</Kbd>
-              </button>
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="hidden h-11 w-full max-w-xl items-center gap-3 rounded-md border bg-card px-4 text-sm text-muted-foreground transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:flex"
+            >
+              <Search className="size-[18px]" />
+              <span className="flex-1 truncate text-left">Search courses, lessons, resources…</span>
+              <Kbd>⌘K</Kbd>
+            </button>
+            <div className="ml-auto flex items-center gap-2">
               <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSearchOpen(true)} aria-label="Search">
                 <Search />
               </Button>
               <NotificationCenter />
               <ThemeToggle />
-              <div className="ml-1">
-                <UserMenu />
-              </div>
+              <div className="mx-1 hidden h-7 w-px bg-border sm:block" />
+              <UserMenu />
             </div>
           </header>
           <main id="main" ref={mainRef} className="flex-1 overflow-y-auto">
             <div key={location.pathname} className="mx-auto w-full max-w-7xl animate-fade-in px-4 py-6 sm:px-6 lg:px-7 lg:py-7">
+              <Breadcrumbs />
               <Outlet />
             </div>
           </main>
