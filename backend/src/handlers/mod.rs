@@ -3,6 +3,7 @@
 pub mod analytics;
 pub mod announcements;
 pub mod assignments;
+pub mod attendance;
 pub mod auth;
 pub mod calendar;
 pub mod courses;

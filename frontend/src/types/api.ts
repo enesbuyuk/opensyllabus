@@ -711,3 +711,47 @@ export interface AuditLog {
 export interface ApiErrorBody {
   error: { code: string; message: string; fields?: Record<string, string> }
 }
+
+export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused'
+
+export interface AttendanceSession {
+  week_number: number
+  day_number: number
+  /** YYYY-MM-DD; null while the course has no start date. */
+  date: string | null
+  starts_at: string | null
+  ends_at: string | null
+  location: string
+  marked: number
+}
+
+export interface AttendanceRecord {
+  week_number: number
+  day_number: number
+  student_id: string
+  status: AttendanceStatus
+}
+
+export interface AttendanceSummary {
+  student_id: string
+  present: number
+  late: number
+  absent: number
+  excused: number
+  /** Present or late out of all marked classes except excused ones. */
+  rate_percent: number | null
+}
+
+export interface CourseAttendance {
+  sessions: AttendanceSession[]
+  students: UserSummary[]
+  records: AttendanceRecord[]
+  summaries: AttendanceSummary[]
+}
+
+export interface MyAttendance {
+  course_id: string
+  course_title: string
+  sessions: (AttendanceSession & { status: AttendanceStatus | null })[]
+  summary: AttendanceSummary
+}

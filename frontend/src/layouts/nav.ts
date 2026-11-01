@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BookOpen,
+  CalendarCheck,
   CalendarDays,
   ClipboardCheck,
   FolderOpen,
@@ -39,5 +40,6 @@ export const ADMIN_NAV: NavItem[] = [
   { label: 'Student Management', to: '/admin/students', icon: Users },
   { label: 'Submission Reviews', to: '/admin/reviews', icon: ClipboardCheck },
   { label: 'Gradebook', to: '/admin/gradebook', icon: Sheet },
+  { label: 'Attendance', to: '/admin/attendance', icon: CalendarCheck },
   { label: 'Analytics', to: '/admin/analytics', icon: BarChart3 },
 ]

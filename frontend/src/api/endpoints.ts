@@ -48,6 +48,10 @@ export const coursesApi = {
   progress: (id: string) => api.get<T.StudentProgressRow[]>(`/courses/${id}/progress`),
   studentProgress: (id: string, studentId: string) => api.get<T.CourseProgress>(`/courses/${id}/students/${studentId}/progress`),
   gradebook: (id: string, q?: { week_id?: string }) => api.get<T.Gradebook>(`/courses/${id}/gradebook`, q),
+  attendance: (id: string) => api.get<T.CourseAttendance>(`/courses/${id}/attendance`),
+  markAttendance: (id: string, body: { week_number: number; day_number: number; records: { student_id: string; status: T.AttendanceStatus | null }[] }) =>
+    api.put<T.CourseAttendance>(`/courses/${id}/attendance`, body),
+  myAttendance: (id: string) => api.get<T.MyAttendance>(`/courses/${id}/attendance/me`),
 }
 
 export type WeekInput = Partial<Pick<T.Week, 'title' | 'description' | 'objectives' | 'instructor_notes' | 'estimated_minutes' | 'status'>> & {

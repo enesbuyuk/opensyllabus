@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { BookOpen, CheckCircle2, Clock, Info, ListChecks, Star, TrendingUp } from 'lucide-react'
+import { BookOpen, CalendarCheck, CheckCircle2, Clock, Info, ListChecks, Star, TrendingUp } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { coursesApi, miscApi } from '@/api/endpoints'
 import { SimpleBarChart } from '@/components/charts'
@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useSelectedCourse } from '@/hooks/queries'
 import { useAuth } from '@/lib/auth'
 import { useBreadcrumbs } from '@/lib/breadcrumbs'
-import { formatDate, formatScore } from '@/lib/utils'
+import { ATTENDANCE_LABELS, ATTENDANCE_STYLE, attendanceSessionLabel } from '@/lib/labels'
+import { cn, formatDate, formatScore } from '@/lib/utils'
 import type { CourseProgress } from '@/types/api'
 
 function ProgressView({ p }: { p: CourseProgress }) {
@@ -111,6 +112,42 @@ function ProgressView({ p }: { p: CourseProgress }) {
   )
 }
 
+function MyAttendanceCard({ courseId }: { courseId: string }) {
+  const q = useQuery({ queryKey: ['attendance', 'me', courseId], queryFn: () => coursesApi.myAttendance(courseId) })
+  if (!q.data || q.data.sessions.length === 0) return null
+  const { summary, sessions } = q.data
+  const missed = sessions.filter((s) => s.status && s.status !== 'present').reverse()
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-3">
+        <div className="space-y-1">
+          <CardTitle className="flex items-center gap-2">
+            <CalendarCheck className="size-4 text-muted-foreground" /> Attendance
+          </CardTitle>
+          <CardDescription>
+            {summary.present} present · {summary.late} late · {summary.absent} absent · {summary.excused} excused
+          </CardDescription>
+        </div>
+        <div className="text-2xl font-semibold tabular-nums">{summary.rate_percent != null ? `${summary.rate_percent}%` : '—'}</div>
+      </CardHeader>
+      <CardContent>
+        {missed.length ? (
+          <ul className="space-y-1.5">
+            {missed.map((s) => (
+              <li key={`${s.week_number}-${s.day_number}`} className="flex items-center justify-between gap-3 text-sm">
+                <span>{attendanceSessionLabel(s)}</span>
+                <span className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', ATTENDANCE_STYLE[s.status!])}>{ATTENDANCE_LABELS[s.status!]}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">{summary.present ? 'You attended every marked class.' : 'No attendance has been taken yet.'}</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function HowCalculated() {
   return (
     <div className="flex gap-3 rounded-xl border bg-muted/20 p-4 text-[13px] text-muted-foreground">
@@ -142,6 +179,7 @@ export function ProgressPage() {
       <div className="space-y-6">
         <PageHeader eyebrow={course.title} title="My progress" actions={<CourseSelect courses={courses.data ?? []} value={course.id} onChange={select} />} />
         {p ? <ProgressView p={p} /> : <EmptyState icon={Clock} title="No progress yet" />}
+        <MyAttendanceCard courseId={course.id} />
         <HowCalculated />
       </div>
     )

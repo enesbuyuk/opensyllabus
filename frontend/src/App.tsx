@@ -34,6 +34,7 @@ const AssignmentEditorPage = lazy(() => import('@/pages/admin/AssignmentEditorPa
 const StudentsPage = lazy(() => import('@/pages/admin/StudentsPage'), 'StudentsPage')
 const ReviewsPage = lazy(() => import('@/pages/admin/ReviewsPage'), 'ReviewsPage')
 const GradebookPage = lazy(() => import('@/pages/admin/GradebookPage'), 'GradebookPage')
+const AttendancePage = lazy(() => import('@/pages/admin/AttendancePage'), 'AttendancePage')
 const AnalyticsPage = lazy(() => import('@/pages/admin/AnalyticsPage'), 'AnalyticsPage')
 
 function FullScreenLoader() {
@@ -105,6 +106,7 @@ export function App() {
                       <Route path="students" element={<StudentsPage />} />
                       <Route path="reviews" element={<ReviewsPage />} />
                       <Route path="gradebook" element={<GradebookPage />} />
+                      <Route path="attendance" element={<AttendancePage />} />
                       <Route path="analytics" element={<AnalyticsPage />} />
                     </Route>
                     <Route path="*" element={<NotFoundPage />} />

@@ -31,6 +31,7 @@ use crate::handlers::*;
         announcements::list, announcements::create, announcements::update, announcements::delete,
         notifications::list, notifications::mark_read, notifications::mark_all_read,
         calendar::entries, calendar::create, calendar::update, calendar::skip_occurrence, calendar::delete,
+        attendance::get, attendance::mark, attendance::mine,
         progress::my_progress, progress::course_progress, progress::student_progress, progress::gradebook, progress::gradebook_csv,
         dashboard::dashboard, analytics::analytics, search::search,
         settings::get, settings::update, settings::audit_logs,
@@ -38,7 +39,7 @@ use crate::handlers::*;
     tags(
         (name = "auth"), (name = "users"), (name = "courses"), (name = "curriculum"), (name = "assignments"),
         (name = "submissions"), (name = "files"), (name = "resources"), (name = "announcements"),
-        (name = "notifications"), (name = "calendar"), (name = "progress"), (name = "dashboard"),
+        (name = "notifications"), (name = "calendar"), (name = "progress"), (name = "attendance"), (name = "dashboard"),
         (name = "analytics"), (name = "search"), (name = "settings"), (name = "health"),
     )
 )]

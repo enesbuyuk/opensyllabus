@@ -60,6 +60,8 @@ fn api_routes(state: &AppState) -> Router<AppState> {
         .route("/courses/{id}/progress", get(progress::course_progress))
         .route("/courses/{id}/students/{student_id}/progress", get(progress::student_progress))
         .route("/courses/{id}/gradebook", get(progress::gradebook))
+        .route("/courses/{id}/attendance", get(attendance::get).put(attendance::mark))
+        .route("/courses/{id}/attendance/me", get(attendance::mine))
         .route("/courses/{id}/gradebook.csv", get(progress::gradebook_csv))
         // Curriculum
         .route("/modules/{id}", axum::routing::patch(curriculum::update_module).delete(curriculum::delete_module))

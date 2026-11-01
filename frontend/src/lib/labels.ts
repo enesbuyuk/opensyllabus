@@ -1,4 +1,4 @@
-import type { AssignmentKind, CalendarEntry, Recurrence, RecurrenceFreq, ResourceKind, StudentAssignmentState, SubmissionStatus } from '@/types/api'
+import type { AssignmentKind, AttendanceSession, AttendanceStatus, CalendarEntry, Recurrence, RecurrenceFreq, ResourceKind, StudentAssignmentState, SubmissionStatus } from '@/types/api'
 import { formatPlainDate } from './utils'
 
 export const ASSIGNMENT_KIND_LABELS: Record<AssignmentKind, string> = {
@@ -97,4 +97,23 @@ export function describeRecurrence(r: Recurrence) {
   if (r.until) text += `, until ${formatPlainDate(r.until)}`
   if (r.count) text += `, ${r.count} ${r.count === 1 ? 'time' : 'times'}`
   return text
+}
+
+export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
+  present: 'Present',
+  late: 'Late',
+  absent: 'Absent',
+  excused: 'Excused',
+}
+
+export const ATTENDANCE_STYLE: Record<AttendanceStatus, string> = {
+  present: 'border-success/40 bg-success/15 text-success',
+  late: 'border-warning/40 bg-warning/15 text-warning',
+  absent: 'border-destructive/40 bg-destructive/15 text-destructive',
+  excused: 'border-info/40 bg-info/15 text-info',
+}
+
+export function attendanceSessionLabel(s: AttendanceSession) {
+  const when = s.date ? formatPlainDate(s.date, { weekday: 'short' }) : `Day ${s.day_number}`
+  return `Week ${s.week_number} · ${when}`
 }
