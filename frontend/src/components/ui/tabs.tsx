@@ -14,7 +14,7 @@ export function TabsList({ className, variant = 'underline', ...props }: React.C
       <P.List
         className={cn(
           variant === 'underline'
-            ? 'inline-flex h-10 max-w-full items-end gap-1 overflow-x-auto border-b text-muted-foreground'
+            ? 'inline-flex h-10 max-w-full items-stretch gap-1 overflow-x-auto overflow-y-hidden text-muted-foreground shadow-[inset_0_-1px_0_var(--border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
             : 'inline-flex h-9 items-center gap-1 rounded-md border bg-muted/60 p-1 text-muted-foreground',
           className,
         )}
@@ -31,7 +31,7 @@ export function TabsTrigger({ className, ...props }: React.ComponentProps<typeof
       className={cn(
         'inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap transition outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 [&_svg]:size-3.5',
         variant === 'underline'
-          ? '-mb-px h-10 border-b-2 border-transparent px-3 text-sm data-[state=active]:border-primary data-[state=active]:font-semibold data-[state=active]:text-foreground'
+          ? 'shrink-0 border-b-2 border-transparent px-3 text-sm data-[state=active]:border-primary data-[state=active]:font-semibold data-[state=active]:text-foreground'
           : 'h-7 rounded-sm px-3 text-[13px] data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs',
         className,
       )}
