@@ -1,17 +1,31 @@
-# OpenSyllabus
+<p align="center">
+  <img src="docs/logo.svg" alt="OpenSyllabus logo" width="96" height="96">
+</p>
 
-**A self-hosted, open-source learning management platform for small, instructor-led cohorts.**
+<h1 align="center">OpenSyllabus</h1>
+
+<p align="center">
+  <strong>A self-hosted, open-source learning management platform for small, instructor-led cohorts.</strong>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/backend-Rust%20%C2%B7%20Axum-orange" alt="Rust">
+  <img src="https://img.shields.io/badge/frontend-React%20%C2%B7%20TypeScript-3178c6" alt="React">
+  <img src="https://img.shields.io/badge/database-SQLite-003b57" alt="SQLite">
+</p>
+
+<p align="center">
+  <a href="https://academy.enesbuyuk.com"><strong>Live demo</strong></a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#quick-start-with-docker">Quick start</a>
+</p>
 
 OpenSyllabus is built for the case most LMSs handle badly: one instructor (or a few) teaching a small
 group through a long, structured, week-by-week curriculum: a semester-long lab course, a
 bootcamp, a mentoring programme, a research group's onboarding track. It runs as a single Docker
 container with an embedded SQLite database, needs no external services, and keeps every student's
 work private.
-
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Rust](https://img.shields.io/badge/backend-Rust%20%C2%B7%20Axum-orange)
-![React](https://img.shields.io/badge/frontend-React%20%C2%B7%20TypeScript-3178c6)
-![SQLite](https://img.shields.io/badge/database-SQLite-003b57)
 
 **Live demo:** [academy.enesbuyuk.com](https://academy.enesbuyuk.com), with an example course, students,
 submissions, grades and attendance.
