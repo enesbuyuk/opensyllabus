@@ -13,10 +13,16 @@ work private.
 ![React](https://img.shields.io/badge/frontend-React%20%C2%B7%20TypeScript-3178c6)
 ![SQLite](https://img.shields.io/badge/database-SQLite-003b57)
 
+**Live demo:** [academy.enesbuyuk.com](https://academy.enesbuyuk.com), with an example course, students,
+submissions, grades and attendance.
+
+![Instructor dashboard](docs/screenshots/teacher-dashboard.png)
+
 ---
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [Features](#features)
 - [How it works](#how-it-works)
 - [Technology](#technology)
@@ -33,6 +39,17 @@ work private.
 - [Limitations and design choices](#limitations-and-design-choices)
 - [Contributing](#contributing)
 - [License](#license)
+
+## Screenshots
+
+Taken from the [live demo](https://academy.enesbuyuk.com).
+
+| Instructor | Student |
+| --- | --- |
+| **Review workspace:** the queue of submissions waiting for feedback<br>![Review workspace](docs/screenshots/teacher-reviews.png) | **Dashboard:** progress, next live class, deadlines and latest grades<br>![Student dashboard](docs/screenshots/student-dashboard.png) |
+| **Gradebook:** grades and submission states per student<br>![Gradebook](docs/screenshots/teacher-gradebook.png) | **Lesson:** Markdown content, objectives and the live class link<br>![Lesson page](docs/screenshots/student-lesson.png) |
+| **Analytics:** completion by student and by week<br>![Analytics](docs/screenshots/teacher-analytics.png) | **Assignment:** rubric scores and instructor feedback<br>![Graded assignment](docs/screenshots/student-assignment.png) |
+| **Attendance:** mark each scheduled class<br>![Attendance](docs/screenshots/teacher-attendance.png) | |
 
 ## Features
 
