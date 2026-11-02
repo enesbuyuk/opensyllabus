@@ -18,6 +18,7 @@ import {
 import { Link } from 'react-router'
 import { calendarApi, miscApi } from '@/api/endpoints'
 import { SimpleBarChart } from '@/components/charts'
+import { CourseBanner } from '@/components/course-banner'
 import { classPhase, LiveClassCard } from '@/components/live-class'
 import { EmptyState, ErrorState, PageHeader, PageSkeleton, StatCard } from '@/components/page'
 import { AssignmentStateBadge, SubmissionStatusBadge } from '@/components/status'
@@ -26,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, Progress, ProgressRing } from '@/components/ui/misc'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useCourses } from '@/hooks/queries'
 import { useUser } from '@/lib/auth'
 import { useBreadcrumbs } from '@/lib/breadcrumbs'
 import { cn, formatDate, formatDateTime, formatMinutes, formatScore, nameParts, relativeTime } from '@/lib/utils'
@@ -95,6 +97,20 @@ function NextClass() {
   )
 }
 
+/** Cover cards for the given courses (all published ones when no id is passed). */
+function CourseBanners({ courseId, showStudents = false }: { courseId?: string; showStudents?: boolean }) {
+  const q = useCourses()
+  const courses = (q.data ?? []).filter((c) => (courseId ? c.id === courseId : c.status === 'published')).slice(0, 4)
+  if (!courses.length) return null
+  return (
+    <div className={cn('grid gap-4', courses.length > 1 && 'lg:grid-cols-2')}>
+      {courses.map((c) => (
+        <CourseBanner key={c.id} course={c} showStudents={showStudents} />
+      ))}
+    </div>
+  )
+}
+
 function StudentDashboardView({ data }: { data: StudentDashboard }) {
   const { user, timezone } = useUser()
   const course = data.courses[0]
@@ -136,6 +152,8 @@ function StudentDashboardView({ data }: { data: StudentDashboard }) {
           )
         }
       />
+
+      <CourseBanners courseId={course.course_id} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex items-center gap-4 rounded-xl border bg-card p-5 shadow-xs">
@@ -328,6 +346,7 @@ function InstructorDashboard({ data }: { data: AdminDashboard }) {
           </Button>
         }
       />
+      <CourseBanners showStudents />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Active students" value={data.total_students} icon={Users} />
         <StatCard label="Active courses" value={data.active_courses} icon={GraduationCap} />

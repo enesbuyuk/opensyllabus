@@ -38,6 +38,8 @@ export function AuthShell({ title, description, children }: { title: string; des
         </div>
 
         <div className="relative max-w-md animate-slide-up">
+          <img src="/illustrations/learning-path-light.svg" alt="" className="mb-8 w-full max-w-sm select-none dark:hidden" draggable={false} />
+          <img src="/illustrations/learning-path.svg" alt="" className="mb-8 hidden w-full max-w-sm select-none dark:block" draggable={false} />
           <h2 className="text-4xl leading-tight font-semibold tracking-tight text-balance xl:text-5xl">
             {t('auth.brand.heading')} <span className="text-primary">{t('auth.brand.headingAccent')}</span>
           </h2>
