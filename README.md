@@ -138,7 +138,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and the rea
 Requirements: Docker with the Compose plugin.
 
 ```bash
-git clone https://github.com/<you>/opensyllabus.git
+git clone https://github.com/enesbuyuk/opensyllabus.git
 cd opensyllabus
 cp .env.example .env
 ```
