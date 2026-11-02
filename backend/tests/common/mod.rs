@@ -37,8 +37,14 @@ pub struct Resp {
 
 impl TestApp {
     pub async fn new() -> Self {
+        Self::with_config(|_, _| {}).await
+    }
+
+    /// Like `new`, but lets a test adjust the config (the closure also gets the temp dir).
+    pub async fn with_config(adjust: impl FnOnce(&mut Config, &std::path::Path)) -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let config = Config::for_tests(dir.path());
+        let mut config = Config::for_tests(dir.path());
+        adjust(&mut config, dir.path());
         std::fs::create_dir_all(&config.storage_dir).unwrap();
         let pool = db::connect(&config.database_path).await.unwrap();
         db::migrate(&pool).await.unwrap();

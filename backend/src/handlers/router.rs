@@ -4,12 +4,13 @@ use std::time::Duration;
 
 use axum::{
     extract::{DefaultBodyLimit, Request},
-    http::{header, HeaderValue},
+    http::{header, HeaderValue, StatusCode},
     middleware::{self, Next},
-    response::Response,
-    routing::{delete, get, post},
+    response::{IntoResponse, Response},
+    routing::{delete, get, post, MethodRouter},
     Router,
 };
+use tower::ServiceExt;
 use tower_http::{
     compression::CompressionLayer,
     services::{ServeDir, ServeFile},
@@ -137,8 +138,22 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/{*rest}", axum::routing::any(api_not_found));
 
     if let Some(dir) = &state.config.static_dir {
-        let index = dir.join("index.html");
-        app = app.fallback_service(ServeDir::new(dir).not_found_service(ServeFile::new(index)));
+        let index = ServeFile::new(dir.join("index.html"));
+        // Client-side routes (`/login`, `/courses/..`) get the SPA shell with a 200. A missing file
+        // (anything under /assets or with an extension) stays a 404, so a stale chunk request is
+        // never answered, and cached for a year, as HTML.
+        let spa_shell: MethodRouter = get(move |req: Request| {
+            let index = index.clone();
+            async move {
+                let path = req.uri().path();
+                let last = path.rsplit('/').next().unwrap_or_default();
+                if path.starts_with("/assets/") || last.contains('.') {
+                    return StatusCode::NOT_FOUND.into_response();
+                }
+                index.oneshot(req).await.into_response()
+            }
+        });
+        app = app.fallback_service(ServeDir::new(dir).fallback(spa_shell));
     }
 
     app.layer(middleware::from_fn_with_state(state.clone(), session_middleware))
