@@ -62,8 +62,25 @@ Please also:
 
 ### Commits
 
-Write commit messages in the imperative mood ("Add rubric export", not "Added…") with a short
-summary line and, when useful, a body explaining why.
+Use [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, where the
+scope is optional and names the area you touched (`assignments`, `attendance`, `calendar`, `ui`, ...).
+
+| Type       | Use for                                                    |
+| ---------- | ---------------------------------------------------------- |
+| `feat`     | a new feature or user-visible behaviour                    |
+| `fix`      | a bug fix                                                  |
+| `docs`     | documentation only                                         |
+| `refactor` | code changes that neither fix a bug nor add a feature      |
+| `perf`     | performance improvements                                   |
+| `test`     | adding or fixing tests                                     |
+| `style`    | formatting only, no code change                            |
+| `build`    | dependencies, Dockerfile, build tooling                    |
+| `ci`       | GitHub Actions workflows                                   |
+| `chore`    | anything else (housekeeping, config)                       |
+
+Write the summary in lowercase, in the imperative mood ("add rubric export", not "added…"), without
+a trailing period. Add a body explaining why when useful. Mark breaking changes with `!` after the
+type (`feat(api)!: ...`) and a `BREAKING CHANGE:` footer.
 
 ## License
 
