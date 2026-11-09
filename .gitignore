@@ -21,3 +21,12 @@ backups/
 .idea/
 .vscode/
 *.log
+
+# ── Derleme / araç çıktıları (ortak) ──
+.next/
+out/
+.vite/
+.turbo/
+coverage/
+.eslintcache
+*.tsbuildinfo
