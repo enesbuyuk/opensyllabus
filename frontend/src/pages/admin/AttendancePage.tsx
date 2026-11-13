@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarCheck, CheckCheck, Save } from 'lucide-react'
 import * as React from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { coursesApi } from '@/api/endpoints'
 import { CourseSelect } from '@/components/course-select'
@@ -14,20 +14,33 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSelectedCourse } from '@/hooks/queries'
 import { useBreadcrumbs } from '@/lib/breadcrumbs'
 import { errorMessage } from '@/lib/errors'
-import { ATTENDANCE_LABELS, ATTENDANCE_STYLE, attendanceSessionLabel as sessionLabel } from '@/lib/labels'
+import { ATTENDANCE_LABELS, ATTENDANCE_STYLE, attendanceSessionLabel as sessionLabel, attendanceSessionShort as sessionShort } from '@/lib/labels'
 import { cn, formatPlainDate } from '@/lib/utils'
 import type { AttendanceSession, AttendanceStatus, CourseAttendance } from '@/types/api'
 
 const STATUSES: AttendanceStatus[] = ['present', 'late', 'absent', 'excused']
 
-const sessionKey = (s: { week_number: number; day_number: number }) => `${s.week_number}-${s.day_number}`
+const sessionKey = (s: { key: string }) => s.key
+
+function SessionOption({ s, total }: { s: AttendanceSession; total: number }) {
+  return (
+    <option value={s.key}>
+      {sessionLabel(s)}
+      {s.marked ? ` (${s.marked}/${total} marked)` : ''}
+    </option>
+  )
+}
 
 function TakeAttendance({ courseId, data }: { courseId: string; data: CourseAttendance }) {
   const qc = useQueryClient()
   const now = new Date().toISOString()
   // Default to the most recent class that has started.
   const started = data.sessions.filter((s) => s.starts_at && s.starts_at <= now)
-  const [key, setKey] = React.useState(() => sessionKey(started.at(-1) ?? data.sessions[0]))
+  const [params] = useSearchParams()
+  const [key, setKey] = React.useState(() => {
+    const wanted = params.get('session')
+    return wanted && data.sessions.some((s) => s.key === wanted) ? wanted : sessionKey(started.at(-1) ?? data.sessions[0])
+  })
   const session = data.sessions.find((s) => sessionKey(s) === key) ?? data.sessions[0]
   const saved = React.useMemo(
     () =>
@@ -39,12 +52,13 @@ function TakeAttendance({ courseId, data }: { courseId: string; data: CourseAtte
   const [draft, setDraft] = React.useState(saved)
   React.useEffect(() => setDraft(saved), [saved])
   const changed = data.students.filter((st) => draft[st.id] !== saved[st.id])
+  const classes = data.sessions.filter((s) => s.kind === 'class')
+  const events = data.sessions.filter((s) => s.kind === 'event')
 
   const save = useMutation({
     mutationFn: () =>
       coursesApi.markAttendance(courseId, {
-        week_number: session.week_number,
-        day_number: session.day_number,
+        key: session.key,
         records: changed.map((st) => ({ student_id: st.id, status: draft[st.id] })),
       }),
     onSuccess: (d) => {
@@ -58,12 +72,20 @@ function TakeAttendance({ courseId, data }: { courseId: string; data: CourseAtte
     <Card>
       <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
         <NativeSelect value={key} onChange={(e) => setKey(e.target.value)} className="w-full sm:w-80" aria-label="Class">
-          {data.sessions.map((s) => (
-            <option key={sessionKey(s)} value={sessionKey(s)}>
-              {sessionLabel(s)}
-              {s.marked ? ` (${s.marked}/${data.students.length} marked)` : ''}
-            </option>
-          ))}
+          {classes.length > 0 && (
+            <optgroup label="Classes">
+              {classes.map((s) => (
+                <SessionOption key={s.key} s={s} total={data.students.length} />
+              ))}
+            </optgroup>
+          )}
+          {events.length > 0 && (
+            <optgroup label="Events">
+              {events.map((s) => (
+                <SessionOption key={s.key} s={s} total={data.students.length} />
+              ))}
+            </optgroup>
+          )}
         </NativeSelect>
         <Button
           variant="outline"
@@ -131,7 +153,7 @@ function Overview({ data }: { data: CourseAttendance }) {
               ))}
               {marked.map((s) => (
                 <TableHead key={sessionKey(s)} className="text-center text-[11px] whitespace-nowrap" title={sessionLabel(s)}>
-                  W{s.week_number}
+                  {sessionShort(s)}
                   <br />
                   {s.date ? formatPlainDate(s.date, { year: undefined }) : `D${s.day_number}`}
                 </TableHead>
@@ -170,7 +192,7 @@ function Overview({ data }: { data: CourseAttendance }) {
           </TableBody>
         </Table>
       </CardContent>
-      <CardFooter className="border-t pt-4 text-xs text-muted-foreground">Attendance counts present and late classes out of all marked classes; excused classes are left out.</CardFooter>
+      <CardFooter className="border-t pt-4 text-xs text-muted-foreground">Attendance counts present and late sessions (classes and events) out of all marked ones; excused sessions are left out.</CardFooter>
     </Card>
   )
 }
@@ -189,18 +211,23 @@ export function AttendancePage() {
       <PageHeader
         eyebrow={course.title}
         title="Attendance"
-        description="Take attendance for each scheduled class and follow every student's attendance rate."
+        description="Take attendance for each scheduled class and for calendar events that take attendance, and follow every student's attendance rate."
         actions={<CourseSelect courses={courses.data ?? []} value={course.id} onChange={select} />}
       />
       {q.data.sessions.length === 0 ? (
         <EmptyState
           icon={CalendarCheck}
-          title="No class schedule"
-          description="Classes come from the course's weekly class schedule. Set it up in the course settings first."
+          title="Nothing to take attendance for"
+          description="Classes come from the course's weekly class schedule. You can also turn on Take attendance for any event you add to the calendar."
           action={
-            <Button asChild variant="outline">
-              <Link to={`/admin/courses/${course.id}`}>Open course settings</Link>
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button asChild variant="outline">
+                <Link to={`/admin/courses/${course.id}`}>Open course settings</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/calendar">Open calendar</Link>
+              </Button>
+            </div>
           }
         />
       ) : (

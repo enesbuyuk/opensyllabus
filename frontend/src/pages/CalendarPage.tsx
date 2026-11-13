@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, addMonths, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from 'date-fns'
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Repeat, Trash2, Video } from 'lucide-react'
+import { CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Plus, Repeat, Trash2, Video } from 'lucide-react'
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
@@ -64,6 +64,7 @@ const eventSchema = z
     end_mode: z.enum(['never', 'until', 'count']),
     until: z.string(),
     count: z.number({ message: 'Enter a number' }).int().min(1, 'At least 1').max(500, 'At most 500'),
+    takes_attendance: z.boolean(),
   })
   .refine((v) => !v.ends_at || v.ends_at >= v.starts_at, { message: 'End must be after start', path: ['ends_at'] })
   .refine((v) => v.repeat === 'none' || v.end_mode !== 'until' || (v.until && v.until >= v.starts_at.slice(0, 10)), {
@@ -74,7 +75,7 @@ type EventForm = z.infer<typeof eventSchema>
 
 const NO_REPEAT = { repeat: 'none', interval: 1, weekdays: [], end_mode: 'never', until: '', count: 10 } as const
 // The dialog's hooks run while it is closed too: every field needs a value before the first reset().
-const EMPTY_EVENT: EventForm = { course_id: '', title: '', kind: 'session', starts_at: '', ends_at: '', location: '', description: '', ...NO_REPEAT, weekdays: [] }
+const EMPTY_EVENT: EventForm = { course_id: '', title: '', kind: 'session', starts_at: '', ends_at: '', location: '', description: '', takes_attendance: false, ...NO_REPEAT, weekdays: [] }
 
 function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean; onOpenChange: (o: boolean) => void; entry: CalendarEntry | null; defaultDate?: string }) {
   const { timezone } = useAuth()
@@ -100,6 +101,7 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
             ends_at: isoToWallTime(series ? series.ends_at : entry.ends_at, tz),
             location: entry.location,
             description: entry.description,
+            takes_attendance: entry.takes_attendance,
             ...(rule
               ? {
                   repeat: rule.freq,
@@ -119,6 +121,7 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
             ends_at: '',
             location: '',
             description: '',
+            takes_attendance: false,
             ...NO_REPEAT,
             weekdays: [],
           },
@@ -162,6 +165,7 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
       ends_at: v.ends_at ? wallTimeToIso(v.ends_at, tz) : '',
       recurrence,
       timezone: tz,
+      takes_attendance: v.takes_attendance,
     }
     try {
       if (entry?.event_id) await calendarApi.update(entry.event_id, body)
@@ -309,6 +313,15 @@ function EventDialog({ open, onOpenChange, entry, defaultDate }: { open: boolean
           <Field label="Description" htmlFor="ev-desc">
             <Textarea id="ev-desc" rows={3} {...form.register('description')} />
           </Field>
+          <label htmlFor="ev-attendance" className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+            <input id="ev-attendance" type="checkbox" className="mt-0.5 size-4 accent-primary" {...form.register('takes_attendance')} />
+            <span className="space-y-0.5">
+              <span className="block text-[13px] font-medium">Take attendance</span>
+              <span className="block text-xs text-muted-foreground">
+                {repeat !== 'none' ? 'Each occurrence' : 'This event'} shows up on the Attendance page next to the scheduled classes and counts toward attendance rates.
+              </span>
+            </span>
+          </label>
           <DialogFooter className="sm:justify-between">
             {entry?.event_id ? (
               <Button type="button" variant="ghost" className="text-destructive" onClick={() => setConfirm(true)}>
@@ -365,6 +378,7 @@ function EntryChip({ e, onEdit }: { e: CalendarEntry; onEdit?: (e: CalendarEntry
       {!e.all_day && <span className="shrink-0 text-muted-foreground tabular-nums">{formatTime(e.starts_at, timezone)}</span>}
       <span className="truncate">{e.title}</span>
       {e.series && <Repeat className="size-2.5 shrink-0 text-muted-foreground" aria-label="Repeats" />}
+      {e.takes_attendance && <CalendarCheck className="size-2.5 shrink-0 text-muted-foreground" aria-label="Takes attendance" />}
       {isSafeMeetingUrl(e.meeting_url) && <Video className="size-2.5 shrink-0 text-primary" aria-label="Online class" />}
     </>
   )
@@ -529,6 +543,15 @@ export function CalendarPage() {
                       </div>
                       {isSafeMeetingUrl(e.meeting_url) && classPhase(e.starts_at, e.ends_at) !== 'ended' && <JoinClassButton url={e.meeting_url} size="sm" />}
                       <Badge variant={KIND_STYLE[e.kind].badge}>{CALENDAR_KIND_LABELS[e.kind]}</Badge>
+                      {isAdmin && e.event_id && e.takes_attendance && (
+                        <Button asChild variant="outline" size="sm">
+                          <Link
+                            to={`/admin/attendance?course=${e.course_id}&session=${encodeURIComponent(`event:${e.event_id}:${e.series?.occurrence_date ?? dayKey(e, timezone)}`)}`}
+                          >
+                            <CalendarCheck /> Attendance
+                          </Link>
+                        </Button>
+                      )}
                       {isAdmin && e.event_id && (
                         <Button variant="ghost" size="sm" onClick={() => setEditing(e)}>
                           Edit

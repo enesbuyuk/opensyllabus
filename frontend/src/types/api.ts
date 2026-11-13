@@ -459,6 +459,7 @@ export interface CalendarEvent {
   ends_at: string | null
   location: string
   timezone: string
+  takes_attendance: boolean
   recurrence: Recurrence | null
   skipped_dates: string[]
 }
@@ -516,6 +517,8 @@ export interface CalendarEntry {
   /** Live class link of a scheduled class. */
   meeting_url: string | null
   event_id: string | null
+  /** Instructor-defined event that takes attendance. */
+  takes_attendance: boolean
   series: EventSeries | null
 }
 
@@ -724,9 +727,17 @@ export interface ApiErrorBody {
 
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused'
 
+/** A scheduled class or one occurrence of a calendar event that takes attendance. */
 export interface AttendanceSession {
-  week_number: number
-  day_number: number
+  /** `class:{week}-{day}` or `event:{event_id}:{occurrence_date}`. */
+  key: string
+  kind: 'class' | 'event'
+  week_number: number | null
+  day_number: number | null
+  event_id: string | null
+  occurrence_date: string | null
+  /** Event title; null for classes. */
+  title: string | null
   /** YYYY-MM-DD; null while the course has no start date. */
   date: string | null
   starts_at: string | null
@@ -736,8 +747,8 @@ export interface AttendanceSession {
 }
 
 export interface AttendanceRecord {
-  week_number: number
-  day_number: number
+  /** Key of the session. */
+  key: string
   student_id: string
   status: AttendanceStatus
 }

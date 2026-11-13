@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Megaphone,
+  ScrollText,
   Settings,
   Sheet,
   TrendingUp,
@@ -42,4 +43,5 @@ export const ADMIN_NAV: NavItem[] = [
   { label: 'Gradebook', to: '/admin/gradebook', icon: Sheet },
   { label: 'Attendance', to: '/admin/attendance', icon: CalendarCheck },
   { label: 'Analytics', to: '/admin/analytics', icon: BarChart3 },
+  { label: 'Activity Log', to: '/admin/activity', icon: ScrollText },
 ]

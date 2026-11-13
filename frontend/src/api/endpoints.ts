@@ -49,7 +49,7 @@ export const coursesApi = {
   studentProgress: (id: string, studentId: string) => api.get<T.CourseProgress>(`/courses/${id}/students/${studentId}/progress`),
   gradebook: (id: string, q?: { week_id?: string }) => api.get<T.Gradebook>(`/courses/${id}/gradebook`, q),
   attendance: (id: string) => api.get<T.CourseAttendance>(`/courses/${id}/attendance`),
-  markAttendance: (id: string, body: { week_number: number; day_number: number; records: { student_id: string; status: T.AttendanceStatus | null }[] }) =>
+  markAttendance: (id: string, body: { key: string; records: { student_id: string; status: T.AttendanceStatus | null }[] }) =>
     api.put<T.CourseAttendance>(`/courses/${id}/attendance`, body),
   myAttendance: (id: string) => api.get<T.MyAttendance>(`/courses/${id}/attendance/me`),
 }
@@ -169,6 +169,7 @@ export type EventInput = {
   /** `{ freq: 'none' }` stops repeating; omitted leaves the rule unchanged. */
   recurrence?: Omit<T.Recurrence, 'freq'> & { freq: T.RecurrenceFreq | 'none' }
   timezone?: string
+  takes_attendance?: boolean
 }
 
 export const calendarApi = {
@@ -188,5 +189,5 @@ export const miscApi = {
   settings: () => api.get<T.PlatformSettings>('/settings'),
   updateSettings: (body: Partial<Pick<T.PlatformSettings, 'platform_name' | 'default_timezone' | 'support_email'>>) =>
     api.patch<T.PlatformSettings>('/settings', body),
-  auditLogs: () => api.get<T.AuditLog[]>('/audit-logs', { limit: 200 }),
+  auditLogs: (q: { limit?: number; action?: string; before?: string } = { limit: 200 }) => api.get<T.AuditLog[]>('/audit-logs', q),
 }

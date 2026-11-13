@@ -99,6 +99,8 @@ pub struct CalendarEvent {
     pub location: String,
     /// IANA timezone a repeating event keeps its wall-clock time in.
     pub timezone: String,
+    /// Attendance is taken for this event (each occurrence of a repeating one).
+    pub takes_attendance: bool,
     pub created_at: String,
     pub updated_at: String,
     #[serde(skip)]
@@ -174,6 +176,8 @@ pub struct CalendarEventInput {
     pub recurrence: Option<Recurrence>,
     /// IANA timezone for a repeating event; defaults to the platform timezone.
     pub timezone: Option<String>,
+    /// Take attendance for this event; omitted leaves it unchanged.
+    pub takes_attendance: Option<bool>,
 }
 
 /// Unified calendar entry: instructor-defined events, assignment deadlines and course milestones.
@@ -195,6 +199,8 @@ pub struct CalendarEntry {
     pub meeting_url: Option<String>,
     /// Only for instructor-defined events (editable).
     pub event_id: Option<String>,
+    /// Instructor-defined event that takes attendance.
+    pub takes_attendance: bool,
     /// Set when the entry is one occurrence of a repeating event.
     pub series: Option<EventSeries>,
 }

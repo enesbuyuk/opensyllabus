@@ -134,14 +134,14 @@ function MyAttendanceCard({ courseId }: { courseId: string }) {
         {missed.length ? (
           <ul className="space-y-1.5">
             {missed.map((s) => (
-              <li key={`${s.week_number}-${s.day_number}`} className="flex items-center justify-between gap-3 text-sm">
+              <li key={s.key} className="flex items-center justify-between gap-3 text-sm">
                 <span>{attendanceSessionLabel(s)}</span>
                 <span className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', ATTENDANCE_STYLE[s.status!])}>{ATTENDANCE_LABELS[s.status!]}</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">{summary.present ? 'You attended every marked class.' : 'No attendance has been taken yet.'}</p>
+          <p className="text-sm text-muted-foreground">{summary.present ? 'You attended every marked session.' : 'No attendance has been taken yet.'}</p>
         )}
       </CardContent>
     </Card>

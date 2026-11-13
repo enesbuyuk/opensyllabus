@@ -258,7 +258,7 @@ function PlatformCard() {
 
 function AuditCard() {
   const { timezone } = useUser()
-  const q = useQuery({ queryKey: ['audit'], queryFn: miscApi.auditLogs })
+  const q = useQuery({ queryKey: ['audit'], queryFn: () => miscApi.auditLogs() })
   return (
     <Card>
       <CardHeader>

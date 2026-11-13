@@ -1,6 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     response::Response,
+    Extension,
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
@@ -10,10 +11,11 @@ use super::{created, json, no_content, ApiJson};
 use crate::{
     auth::{access, AdminUser, AuthUser},
     errors::{AppError, AppResult},
+    middleware::ClientIp,
     models::misc::{CalendarEntry, CalendarEvent, CalendarEventInput, EventSeries, Recurrence, SkipOccurrenceRequest},
     repositories::assignments::{self as assignment_repo, AssignmentFilter},
     services::{
-        progress,
+        audit, progress,
         recurrence::{self, Freq, Rule},
         schedule,
     },
@@ -32,8 +34,8 @@ pub struct CalendarQuery {
     pub course_id: Option<String>,
 }
 
-const EVENT_SELECT: &str = "SELECT e.id, e.course_id, c.title AS course_title, e.title, e.description, e.kind, e.starts_at, e.ends_at,
-    e.location, e.timezone, e.created_at, e.updated_at, e.repeat_freq, e.repeat_interval, e.repeat_weekdays, e.repeat_until,
+pub(crate) const EVENT_SELECT: &str = "SELECT e.id, e.course_id, c.title AS course_title, e.title, e.description, e.kind, e.starts_at, e.ends_at,
+    e.location, e.timezone, e.takes_attendance, e.created_at, e.updated_at, e.repeat_freq, e.repeat_interval, e.repeat_weekdays, e.repeat_until,
     e.repeat_count, e.repeat_exceptions FROM calendar_events e JOIN courses c ON c.id = e.course_id";
 
 fn utc(ts: &str) -> Option<DateTime<Utc>> {
@@ -41,7 +43,7 @@ fn utc(ts: &str) -> Option<DateTime<Utc>> {
 }
 
 /// Fills `recurrence` / `skipped_dates` from the stored columns.
-fn with_series(mut e: CalendarEvent) -> CalendarEvent {
+pub(crate) fn with_series(mut e: CalendarEvent) -> CalendarEvent {
     e.recurrence = e.repeat_freq.clone().map(|freq| Recurrence {
         freq,
         interval: e.repeat_interval,
@@ -83,12 +85,13 @@ fn event_entry(e: &CalendarEvent, starts_at: String, ends_at: Option<String>, se
         link: None,
         meeting_url: None,
         event_id: Some(e.id.clone()),
+        takes_attendance: e.takes_attendance,
         series,
     }
 }
 
 /// The event itself, or each occurrence of a repeating event inside `[from, to)`.
-fn event_entries(e: &CalendarEvent, from: &str, to: &str) -> Vec<CalendarEntry> {
+pub(crate) fn event_entries(e: &CalendarEvent, from: &str, to: &str) -> Vec<CalendarEntry> {
     let (Some(rule), Some(start), Some(win_from), Some(win_to)) = (rule_of(e), utc(&e.starts_at), utc(from), utc(to)) else {
         return vec![event_entry(e, e.starts_at.clone(), e.ends_at.clone(), None)];
     };
@@ -163,6 +166,7 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
                 link: Some(format!("/assignments/{}", a.assignment.id)),
                 meeting_url: None,
                 event_id: None,
+                takes_attendance: false,
                 series: None,
             });
         }
@@ -212,6 +216,7 @@ pub async fn entries(State(state): State<AppState>, user: AuthUser, Query(q): Qu
                 link,
                 meeting_url: None,
                 event_id: None,
+                takes_attendance: false,
                 series: None,
             });
         }
@@ -292,6 +297,7 @@ async fn class_entries(
             link: open.then(|| format!("/lessons/{lesson_id}")),
             meeting_url: if open { lesson_meeting.or_else(|| slot.meeting_url.clone()) } else { slot.meeting_url.clone() },
             event_id: None,
+            takes_attendance: false,
             series: None,
         });
     }
@@ -307,6 +313,7 @@ struct Resolved {
     location: String,
     timezone: String,
     recurrence: Option<Recurrence>,
+    takes_attendance: bool,
 }
 
 /// Validates a repeat rule; `None` for `freq: "none"`.
@@ -366,6 +373,7 @@ fn resolve(req: CalendarEventInput, base: Option<&CalendarEvent>, default_tz: &s
         ends_at,
         timezone,
         recurrence,
+        takes_attendance: req.takes_attendance.or(base.map(|b| b.takes_attendance)).unwrap_or(false),
     };
     Validator::new()
         .len(&r.title, "title", 1, 200)
@@ -387,7 +395,12 @@ async fn load(state: &AppState, id: &str) -> AppResult<CalendarEvent> {
 }
 
 #[utoipa::path(post, path = "/api/v1/calendar/events", tag = "calendar", request_body = CalendarEventInput, responses((status = 201, body = CalendarEvent)))]
-pub async fn create(State(state): State<AppState>, admin: AdminUser, ApiJson(req): ApiJson<CalendarEventInput>) -> AppResult<Response> {
+pub async fn create(
+    State(state): State<AppState>,
+    Extension(ip): Extension<ClientIp>,
+    admin: AdminUser,
+    ApiJson(req): ApiJson<CalendarEventInput>,
+) -> AppResult<Response> {
     let course_id = req.course_id.clone().ok_or_else(|| AppError::field("course_id", "Select a course"))?;
     access::course_for(&state.pool, &admin, &course_id).await?;
     let r = resolve(req, None, state.timezone().name())?;
@@ -396,8 +409,8 @@ pub async fn create(State(state): State<AppState>, admin: AdminUser, ApiJson(req
     let rec = r.recurrence.as_ref();
     sqlx::query(
         "INSERT INTO calendar_events (id, course_id, title, description, kind, starts_at, ends_at, location, timezone, repeat_freq,
-            repeat_interval, repeat_weekdays, repeat_until, repeat_count, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            repeat_interval, repeat_weekdays, repeat_until, repeat_count, takes_attendance, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&course_id)
@@ -413,12 +426,28 @@ pub async fn create(State(state): State<AppState>, admin: AdminUser, ApiJson(req
     .bind(rec.map(|x| weekdays_column(&x.weekdays)).unwrap_or_default())
     .bind(rec.and_then(|x| x.until.clone()))
     .bind(rec.and_then(|x| x.count))
+    .bind(r.takes_attendance)
     .bind(&admin.id)
     .bind(&ts)
     .bind(&ts)
     .execute(&state.pool)
     .await?;
-    Ok(created(load(&state, &id).await?))
+    let e = load(&state, &id).await?;
+    log_event(&state, &admin, "calendar.event_create", &e, &ip).await;
+    Ok(created(e))
+}
+
+async fn log_event(state: &AppState, admin: &AdminUser, action: &str, e: &CalendarEvent, ip: &ClientIp) {
+    audit::log(
+        &state.pool,
+        Some(&admin.id),
+        action,
+        "calendar_event",
+        Some(&e.id),
+        serde_json::json!({ "title": e.title, "course": e.course_title, "starts_at": e.starts_at, "takes_attendance": e.takes_attendance }),
+        ip.0.as_deref(),
+    )
+    .await;
 }
 
 fn weekdays_column(days: &[u32]) -> String {
@@ -428,7 +457,8 @@ fn weekdays_column(days: &[u32]) -> String {
 #[utoipa::path(patch, path = "/api/v1/calendar/events/{id}", tag = "calendar", params(("id" = String, Path)), request_body = CalendarEventInput, responses((status = 200, body = CalendarEvent)))]
 pub async fn update(
     State(state): State<AppState>,
-    _admin: AdminUser,
+    Extension(ip): Extension<ClientIp>,
+    admin: AdminUser,
     Path(id): Path<String>,
     ApiJson(req): ApiJson<CalendarEventInput>,
 ) -> AppResult<Response> {
@@ -440,7 +470,7 @@ pub async fn update(
     sqlx::query(
         "UPDATE calendar_events SET title = ?, description = ?, kind = ?, starts_at = ?, ends_at = ?, location = ?, timezone = ?,
             repeat_freq = ?, repeat_interval = ?, repeat_weekdays = ?, repeat_until = ?, repeat_count = ?, repeat_exceptions = ?,
-            updated_at = ? WHERE id = ?",
+            takes_attendance = ?, updated_at = ? WHERE id = ?",
     )
     .bind(&r.title)
     .bind(r.description.trim())
@@ -455,17 +485,21 @@ pub async fn update(
     .bind(rec.and_then(|x| x.until.clone()))
     .bind(rec.and_then(|x| x.count))
     .bind(exceptions)
+    .bind(r.takes_attendance)
     .bind(now())
     .bind(&id)
     .execute(&state.pool)
     .await?;
-    Ok(json(load(&state, &id).await?))
+    let e = load(&state, &id).await?;
+    log_event(&state, &admin, "calendar.event_update", &e, &ip).await;
+    Ok(json(e))
 }
 
 #[utoipa::path(post, path = "/api/v1/calendar/events/{id}/skip", tag = "calendar", params(("id" = String, Path)), request_body = SkipOccurrenceRequest, responses((status = 200, body = CalendarEvent)))]
 pub async fn skip_occurrence(
     State(state): State<AppState>,
-    _admin: AdminUser,
+    Extension(ip): Extension<ClientIp>,
+    admin: AdminUser,
     Path(id): Path<String>,
     ApiJson(req): ApiJson<SkipOccurrenceRequest>,
 ) -> AppResult<Response> {
@@ -485,12 +519,20 @@ pub async fn skip_occurrence(
         .bind(&id)
         .execute(&state.pool)
         .await?;
-    Ok(json(load(&state, &id).await?))
+    let e = load(&state, &id).await?;
+    log_event(&state, &admin, "calendar.event_skip", &e, &ip).await;
+    Ok(json(e))
 }
 
 #[utoipa::path(delete, path = "/api/v1/calendar/events/{id}", tag = "calendar", params(("id" = String, Path)), responses((status = 204)))]
-pub async fn delete(State(state): State<AppState>, _admin: AdminUser, Path(id): Path<String>) -> AppResult<Response> {
-    load(&state, &id).await?;
+pub async fn delete(
+    State(state): State<AppState>,
+    Extension(ip): Extension<ClientIp>,
+    admin: AdminUser,
+    Path(id): Path<String>,
+) -> AppResult<Response> {
+    let e = load(&state, &id).await?;
     sqlx::query("DELETE FROM calendar_events WHERE id = ?").bind(&id).execute(&state.pool).await?;
+    log_event(&state, &admin, "calendar.event_delete", &e, &ip).await;
     Ok(no_content())
 }

@@ -115,5 +115,50 @@ export const ATTENDANCE_STYLE: Record<AttendanceStatus, string> = {
 
 export function attendanceSessionLabel(s: AttendanceSession) {
   const when = s.date ? formatPlainDate(s.date, { weekday: 'short' }) : `Day ${s.day_number}`
-  return `Week ${s.week_number} · ${when}`
+  return s.kind === 'event' ? `${s.title} · ${when}` : `Week ${s.week_number} · ${when}`
+}
+
+/** Short column heading for a session in attendance grids. */
+export function attendanceSessionShort(s: AttendanceSession) {
+  if (s.kind === 'event') return s.title && s.title.length > 10 ? `${s.title.slice(0, 9)}…` : (s.title ?? 'Event')
+  return `W${s.week_number}`
+}
+
+/** Activity log filters: an action prefix per area. */
+export const AUDIT_CATEGORIES: { value: string; label: string }[] = [
+  { value: '', label: 'All activity' },
+  { value: 'auth', label: 'Sign-ins and passwords' },
+  { value: 'attendance', label: 'Attendance' },
+  { value: 'calendar', label: 'Calendar events' },
+  { value: 'course', label: 'Courses and enrollment' },
+  { value: 'week', label: 'Weeks' },
+  { value: 'lesson', label: 'Lessons' },
+  { value: 'assignment', label: 'Assignments' },
+  { value: 'submission', label: 'Submissions' },
+  { value: 'group', label: 'Groups' },
+  { value: 'resource', label: 'Resources' },
+  { value: 'announcement', label: 'Announcements' },
+  { value: 'user', label: 'Users' },
+  { value: 'settings', label: 'Settings' },
+]
+
+/** "attendance.mark" -> "Attendance · mark" */
+export function auditActionLabel(action: string) {
+  const [area, ...rest] = action.split('.')
+  const name = AUDIT_CATEGORIES.find((c) => c.value === area)?.label ?? area
+  return rest.length ? `${name} · ${rest.join('.').replaceAll('_', ' ')}` : name
+}
+
+/** Key/value pairs of an audit entry's JSON details, skipping empty values. */
+export function auditDetails(details: string): [string, string][] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(details)
+  } catch {
+    return details ? [['details', details]] : []
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed == null ? [] : [['details', JSON.stringify(parsed)]]
+  return Object.entries(parsed as Record<string, unknown>)
+    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([k, v]) => [k.replaceAll('_', ' '), typeof v === 'object' ? JSON.stringify(v) : String(v)])
 }

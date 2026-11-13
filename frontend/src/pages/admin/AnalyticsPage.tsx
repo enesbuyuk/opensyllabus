@@ -140,14 +140,14 @@ function StudentAnalytics({ courseId, studentId, a }: { courseId: string; studen
         <Card>
           <CardHeader>
             <CardTitle>Attendance</CardTitle>
-            <CardDescription>Every class with attendance taken</CardDescription>
+            <CardDescription>Every class and event with attendance taken</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-1.5">
             {sessions.map((s) => {
-              const v = records.find((r) => r.week_number === s.week_number && r.day_number === s.day_number)?.status as AttendanceStatus | undefined
+              const v = records.find((r) => r.key === s.key)?.status as AttendanceStatus | undefined
               return (
                 <span
-                  key={`${s.week_number}-${s.day_number}`}
+                  key={s.key}
                   title={`${attendanceSessionLabel(s)}: ${v ? ATTENDANCE_LABELS[v] : 'Not marked'}`}
                   className={cn('inline-flex size-7 items-center justify-center rounded border text-[11px] font-semibold', v ? ATTENDANCE_STYLE[v] : 'text-muted-foreground')}
                 >
